@@ -1,0 +1,354 @@
+---
+title: |
+  <center>
+  ![](https://i.imgur.com/1qIPO3t.png){ width=70%   sytle="display; left:50%" } 
+  
+  Densidade em função da Resistência e Rigidez
+author: <center> "Elaborado por Profª Drª Isabel Homczinski""
+date: <center> "`r format(Sys.time(), '%d %B, %Y')`""
+output:
+  html_document:
+    highlight: zenburn
+    theme: bootstrap
+    number_sections: yes
+    toc: yes
+    toc_float:
+      collapsed: yes
+      smooth_scroll: yes
+csl: "instituto-brasileiro-de-informacao-em-ciencia-e-tecnologia-abnt.csl"
+bibliography: refs.bib
+---
+
+```{=html}
+<style> body{text-align:justify; font-family: arial; padding: 12px}
+p {text-indent: 1.5em; line-height:1.5em; font-size: 11pt;  margin-left: 3px; margin-right: 2px; 
+margin-top: 3px; margin-bottom: 2px;}
+h1{font-size: 14pt; font-weight: bold; }
+h2 {font-size: 13pt; font-weight: bold}
+h3 {font-size: 12pt; font-weight: bold}
+</style>
+```
+
+# Instalação dos pacotes
+
+> Instalação do pacote e verificação se todos estão instalados. O Comando abaixo ajuda a verificar se os pacotes estão instalados, ou se necessitam ser instalados e habilitados.
+
+```{r Pacotes, message=FALSE, warning=FALSE}
+
+pacotes <- c("tidyverse", "readxl", "ggpubr", "kableExtra", 
+             "PerformanceAnalytics", "scatterplot3d", "MASS", 
+             "gridExtra", "car", "lmtest", "plyr", "knitr", "dplyr")
+
+if(sum(as.numeric(!pacotes %in% installed.packages())) != 0){
+  instalador <- pacotes[!pacotes %in% installed.packages()]
+  for(i in 1:length(instalador)) {
+    install.packages(instalador, dependencies = T)
+    break()}
+  sapply(pacotes, require, character = T) 
+} else {
+  sapply(pacotes, require, character = T) 
+}
+
+```
+
+# Densidade e Propriedades Mecânicas do Combustível
+
+A densidade se refere a quantidade de combustível por unidade de volume. O objetivo principal dessa modelagem é verificar **se a Densidade tem correlação com as propriedades mecânicas do combustível (resistência e rigidez)**. Caso haja associação entre essas variáveis, interpretar a modelagem estatística realizada e a influência de cada variável no valor da densidade, por meio da comparação da magnitude dos betas da equação de regressão ajustada. Adicionalmente, avaliar a qualidade dos dados experimentais por meio das seguintes estatísticas descritivas: média, desvio padrão, coeficiente de variação e score z. Como referência para a Área de Tecnologia da Madeira, nas disciplinas ministradas pela professora Gilmara, deve-se considerar dados de excelente qualidade **se o Coeficiente de variação tiver valor de até 10%, de 10 a 20% dados bons, de 20 a 30 % dados ruins e acima de 30% dados péssimos**. Também, no que se refere ao score Z, valores em módulo acima de 2 serão considerados como outliers (pontos atípicos). Os outliers também serão identificados por meio de gráficos box plot das variáveis do modelo.
+
+## Banco de Dados
+
+```{r arquivo1, message=FALSE, warning=FALSE}
+
+tabela1 <- read_excel("Dados.xlsx",
+                 sheet = "Densidade")
+```
+
+```{r dados1}
+tabela1 %>%
+  kbl(caption = "Tabela dos Dados", align = 'cc') %>%
+  kable_classic(full_width = F, html_font = "Times", font_size = 12)%>%
+  scroll_box(width = "400px", height = "300px")
+```
+
+## Análise Descritiva
+
+```{r analise_descritiva1}
+# Densidade
+y <- tabela1$Densidade
+mean_and_sd <- function(y) {
+    m <- mean(y) # média
+    s <- sd(y) # desvio padrão
+    # sprintf("%0.3f U00B1 %0.3f", m, s)
+    sprintf("%0.0f $\\pm$ %0.2f", m, s)}
+Med_e_sd<- mean_and_sd(y)
+cv <- function(y) {100 * sd(y)/mean(y)}
+Coef_de_Variacao<-cv(y) # coeficiente de variação
+Coef_de_Variacao<-round(Coef_de_Variacao, 2)
+Densidade<-data.frame(Med_e_sd, Coef_de_Variacao)
+
+# Resistencia
+y <- tabela1$Resistencia
+mean_and_sd <- function(y) {
+    m <- mean(y) # média
+    s <- sd(y) # desvio padrão
+    # sprintf("%0.3f U00B1 %0.3f", m, s)
+    sprintf("%0.0f $\\pm$ %0.2f", m, s)}
+Med_e_sd<- mean_and_sd(y)
+cv <- function(y) {100 * sd(y)/mean(y)}
+Coef_de_Variacao<-cv(y) # coeficiente de variação
+Coef_de_Variacao<-round(Coef_de_Variacao, 2)
+Resistencia<-data.frame(Med_e_sd, Coef_de_Variacao)
+
+#Rigidez
+y <- tabela1$Rigidez
+mean_and_sd <- function(y) {
+    m <- mean(y) # média
+    s <- sd(y) # desvio padrão
+    # sprintf("%0.3f U00B1 %0.3f", m, s)
+    sprintf("%0.0f $\\pm$ %0.2f", m, s)}
+Med_e_sd<- mean_and_sd(y)
+cv <- function(y) {100 * sd(y)/mean(y)}
+Coef_de_Variacao<-cv(y) # coeficiente de variação
+Coef_de_Variacao<-round(Coef_de_Variacao, 2)
+Rigidez<-data.frame(Med_e_sd, Coef_de_Variacao)
+
+# Junção dos data.frame
+dados<-rbind(Densidade,Resistencia)
+dados<-rbind(dados, Rigidez)
+
+# Criar uma coluna com o nome das variáveis
+dados<-mutate(dados, 
+      Variaveis=c("Densidade (g/cm$^{3}$)", "Resistência (MPa)", "Rigidez (MPa)"))
+dados<-data.frame(dados)
+
+#Organizar as colunas no data.frame
+date<-dplyr::select(dados, Variaveis, Med_e_sd, Coef_de_Variacao) 
+
+# Criar da Tabela Descritiva
+knitr::kable(date, align = 'cc', caption = "Tabela Descritiva",
+             col.names = c("Variáveis", "Média $\\pm$ sd", "  CV(%)")) %>%
+  kable_classic(full_width = F, html_font = "Times", font_size = 16)
+```
+
+### Densidade - outlier
+
+```{r, descritiva_Densidade, message=FALSE, warning=FALSE}
+y <- tabela1$Densidade
+
+scale(y) # padronização da variável 
+score_z <- function(y, media = NULL, despad = NULL) {if (is.null(media)) {
+    media <- mean(y)}
+  if (is.null(despad)) {despad <- sd(y)}
+  (y - media)/despad}
+status <- ifelse(abs(score_z(y)) > 2, "outlier", "tipical") # ocorrência de outlier
+table(status)
+```
+
+### Resistência - outlier
+
+```{r descritiva_Resistencia,  message=FALSE, warning=FALSE}
+y <- tabela1$Resistencia
+scale(y) # padronização da variável 
+score_z <- function(y, media = NULL, despad = NULL) {if (is.null(media)) {
+    media <- mean(y)}
+  if (is.null(despad)) {despad <- sd(y)}
+  (y - media)/despad}
+status <- ifelse(abs(score_z(y)) > 2, "outlier", "tipical") # ocorrência de outlier
+table(status)
+```
+
+### Rigidez - outlier
+
+```{r descritiva_Rigidez,  message=FALSE, warning=FALSE}
+y <- tabela1$Rigidez
+scale(y) # padronização da variável 
+score_z <- function(y, media = NULL, despad = NULL) {if (is.null(media)) {
+    media <- mean(y)}
+  if (is.null(despad)) {despad <- sd(y)}
+  (y - media)/despad}
+status <- ifelse(abs(score_z(y)) > 2, "outlier", "tipical") # ocorrência de outlier
+table(status)
+```
+
+## Gráfico Box Plot
+
+```{r box plot1}
+par(mfrow=c(1,3))
+boxplot(tabela1$Densidade, col="blue", main="Box Plot", 
+        ylab= "Densidade (g/cm³)", adj=0.5, ylim= c(400,1200))
+
+boxplot(tabela1$Resistencia, col="purple",main="Box Plot", 
+        ylab= "Resistência (MPa)", adj=0.5, ylim= c(30,100))
+
+boxplot(tabela1$Rigidez,col="green2",main="Box Plot", ylab= "Rigidez (MPa)", 
+        adj=0.5, ylim= c(1000,30000)) 
+```
+
+## Dispersão, Histograma e Correlação
+
+```{r correlação1, message=FALSE, warning=FALSE}
+
+chart.Correlation(tabela1, histogram =TRUE)
+```
+
+## Regressão Linear Múltipla 
+
+```{r regressao1}
+# Ajuste do modelo 
+modelo1<-lm(formula =Densidade~Resistencia+Rigidez, 
+            data=tabela1); modelo1
+
+# Estatísticas das estimativas dos paramentros do modelo
+summary(modelo1)
+
+# Anova da regressão do modelo
+anova(modelo1)
+```
+
+### Medidas de Precisão para Análise do Modelo
+
+```{r precisao1}
+Densidade_est<-predict.lm(modelo1)
+newdata1 = data.frame(tabela1, Densidade_est)
+Res<-(((newdata1$Densidade-newdata1$Densidade_est)/(newdata1$Densidade))*100)
+newdata1 = data.frame(tabela1, Densidade_est,Res)
+
+resid<-(newdata1$Densidade-newdata1$Densidade_est)
+Res2<-resid^2
+
+SQResiduo<- sum(Res2)
+
+SQTotal<-var(newdata1$Densidade)*((length(newdata1$Densidade))-1)
+
+R2<-(1-(SQResiduo/SQTotal))
+a<-(length(newdata1$Densidade)-1)/(length(newdata1$Densidade)-2)
+
+R2adj<-(1-(a*(1-R2)))
+
+Syx<-sqrt(SQResiduo/((length(newdata1$Densidade))-2))
+
+Syx_Porc<-(Syx/(mean(newdata1$Densidade)))*100
+
+R2<-round(R2, 2)
+R2adj<-round(R2adj,2)
+Syx<-round(Syx,2)
+Syx_Porc<-round(Syx_Porc, 2)
+
+newdata11 = data.frame(R2,R2adj,Syx,Syx_Porc)
+
+# Criar da Tabela Descritiva
+knitr::kable(newdata11, align = 'cc', 
+             caption = "Medidas de Precisão do Modelo",
+             col.names = c("R$^{2}$", "R$_{adj}^{2}$", "S$_{yx}$", "S$_{yx}$%")) %>%
+  kable_classic(full_width = F, html_font = "Times", font_size = 16)
+
+
+```
+
+### Predição da Densidade aplicando o modelo
+
+```{r predicao1}
+newdatas<-data.frame(Resistencia= c(50),Rigidez= c(12876))
+Densidade_estimado1 = predict(modelo1, newdatas, interval = "confidence");
+Densidade_estimado1 # Valores do limite de confiança dos valores preditos
+
+```
+
+### Testes de hipoteses
+
+NORMALIDADE:\
+**Ho: resíduos seguem distribuição normal;**\
+**Hi: resíduos não seguem distribuição normal**\
+Resultado:\
+**Valor de p \> 0.05, não rejeita Ho para alfa=5%.**
+
+```{r Normalidade1}
+## Normalidade dos Resíduos
+shapiro.test(modelo1$residuals)
+ks.test(modelo1$residuals, "pnorm")
+```
+
+INDEPENDÊNCIA DOS RESÍDUOS:\
+**Ho: resíduos são independentes;**\
+**Hi: resíduos não são independentes**\
+Resultado:\
+**Valor de p \> 0.05, não rejeita Ho para alfa=5%.**
+
+```{r Residuos1}
+## Independencia dos Resíduos (Durbin-Watson)
+durbinWatsonTest(modelo1)
+```
+
+HOMOSCEDASTICIDADE DOS RESÍDUOS:\
+**Ho: resíduos são homogênios
+;**\
+**Hi: resíduos não são homogênios;**\
+Resultado:\
+**Valor de p \> 0.05, não rejeita Ho para alfa=5%.**
+
+```{r Homocedasticidade1}
+## Homocedasticidade (Breusch-Pagan)
+bptest(modelo1)
+ncvTest(modelo1)
+```
+
+### Gráfico 1:1 e de Resíduos
+
+**Valores em vermelho estimados; valores em azul observados.**
+
+```{r grafico_reg1}
+
+G1<-ggplot(newdata1) + 
+  geom_point(size=2, aes(x=Densidade, y=Densidade_est), color="red2")+
+  geom_abline(intercept = 0, slope = 1, color = "black")+
+  geom_point(size=2, aes(x=Densidade_est, y=Densidade), color="blue2")+
+  theme_classic()+ # aparencia clean do gráfico
+  labs(x = "Densidade Observada (g/cm³)",
+       y = "Densidade Estimada (g/cm³)",
+       title = "Gráfico 1:1")+ # legendas
+  theme( plot.title = element_text(hjust = 0.5),
+         legend.title = element_text(hjust = 0.5))+ # centralizar títulos
+  theme(plot.title = element_text(size = 13, face = "bold"),
+        axis.title = element_text(size = 12),
+        axis.text = element_text(size = 10))  # negrito nos títulos
+
+G2<-ggplot(newdata1) + 
+  geom_point(size=2, aes(x=Densidade, y=Res)
+             ,color="black")+ # gráfico de pontos
+  theme_classic()+ # aparencia clean do gráfico
+  labs(x = "Densidade Observada (g/cm³)",
+       y = "Resíduo (%)",
+       title = "Gráfico de Resíduos")+ # legendas
+  scale_x_continuous(breaks = seq(450, 1250, 250), limits= c(450,1250)) + # eixo x
+  scale_y_continuous(breaks = seq(-30, 30, 10), limits= c(-30,30)) + # eixo y
+  theme( plot.title = element_text(hjust = 0.5),
+         legend.title = element_text(hjust = 0.5))+ # centralizar títulos
+  theme(plot.title = element_text(size = 13, face = "bold"),
+        axis.title = element_text(size = 12),
+        axis.text = element_text(size = 10))+
+  # negrito nos títulos
+  geom_hline(yintercept = 0, color="black")+ # linha no 0 do eixo y
+  theme(axis.title.y = element_text(angle = 90))
+
+grid.arrange(G1,G2, ncol=1) 
+```
+
+### Gráfico 3D de Dispersão em função do modelo
+
+```{r}
+graph<-scatterplot3d(tabela1$Densidade~tabela1$Resistencia+tabela1$Rigidez,
+                     pch=16, angle=45,color="blue", box=FALSE,
+                     xlab="Resistência (MPa)", ylab="Rigidez (Mpa)", zlab = "Densidade (g/cm³)")
+# previsão do modelo: Quando o modelo é apropriado todos os pontos ficam dentro
+#do plano.
+graph$plane3d(modelo1, col="black", draw_polygon=TRUE) 
+
+```
+
+# Citações
+
+> De acordo com @grolemund2018r, a ciência de dados é uma área em crescimento.
+
+> A regressão não linear geralmente possui parâmetros interpretáveis [@ROSSE2000]. Para @Chen2021, a análise multivariada é a melhor opção.
+
+# Referências

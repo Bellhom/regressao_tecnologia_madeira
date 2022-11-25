@@ -1,0 +1,360 @@
+---
+title: |
+  <center>
+  ![](https://i.imgur.com/1qIPO3t.png){ width=70%   sytle="display; left:50%" } 
+    
+  Poder Calorífico Superior em função da Composição Imediata
+author: <center> "Elaborado por Profª Drª Isabel Homczinski""
+date: <center> "`r format(Sys.time(), '%d %B, %Y')`""
+output: 
+    html_document:
+      highlight: zenburn
+      theme: bootstrap
+      number_sections: yes
+      toc: yes
+      toc_float:
+         collapsed: yes
+         smooth_scroll: yes
+csl: "instituto-brasileiro-de-informacao-em-ciencia-e-tecnologia-abnt.csl"
+bibliography: refs.bib
+---
+
+```{=html}
+<style> body{text-align:justify; font-family: arial; padding: 12px}
+p {text-indent: 1.5em; line-height:1.5em; font-size: 11pt;  margin-left: 3px; margin-right: 2px; 
+margin-top: 3px; margin-bottom: 2px;}
+h1{font-size: 14pt; font-weight: bold; }
+h2 {font-size: 13pt; font-weight: bold}
+h3 {font-size: 12pt; font-weight: bold}
+</style>
+```
+
+# Instalação dos pacotes
+
+> Instalação do pacote e verificação se todos estão instalados. O Comando abaixo ajuda a verificar se os pacotes estão instalados, ou se necessitam ser instalados.
+
+```{r Pacotes5, message=FALSE, warning=FALSE}
+
+pacotes <- c("tidyverse", "readxl", "ggpubr", "kableExtra", 
+             "PerformanceAnalytics", "scatterplot3d", "MASS", 
+             "gridExtra", "car", "lmtest", "plyr", "knitr", "dplyr")
+
+if(sum(as.numeric(!pacotes %in% installed.packages())) != 0){
+  instalador <- pacotes[!pacotes %in% installed.packages()]
+  for(i in 1:length(instalador)) {
+    install.packages(instalador, dependencies = T)
+    break()}
+  sapply(pacotes, require, character = T) 
+} else {
+  sapply(pacotes, require, character = T) 
+}
+
+```
+
+# Poder Calorífico Superior e a Composição Imediata
+
+O Poder calorífico é uma medida da quantidade de energia térmica liberada, na forma de calor, na queima completa de 1kg de combustível. O objetivo principal dessa modelagem é verificar **se o Poder Calorífico (PC) tem correlação com a Composição Imediata da biomassa (teor de carbono fixo, voláteis e cinzas)**. Caso haja associação entre essas variáveis, interpretar a modelagem estatística realizada e a influência de cada variável no valor do PC, por meio da comparação da magnitude dos betas da equação de regressão ajustada. Adicionalmente, avaliar a qualidade dos dados experimentais por meio das seguintes estatísticas descritivas: média, desvio padrão, coeficiente de variação e score z. Como referência para a Área de Tecnologia da Madeira, nas disciplinas ministradas pela professora Gilmara, deve-se considerar dados de excelente qualidade **se o Coeficiente de variação tiver valor de até 10%, de 10 a 20% dados bons, de 20 a 30 % dados ruins e acima de 30% dados péssimos**. Também, no que se refere ao score Z, valores em módulo acima de 2 serão considerados como outliers (pontos atípicos). Os outliers também serão identificados por meio de gráficos box plot das variáveis do modelo.
+
+## Banco de Dados
+
+```{r arquivo4, message=FALSE, warning=FALSE}
+
+tabela4 <- read_excel("Dados.xlsx",
+                 sheet = "Analise_imediata")
+```
+
+```{r dados4_1}
+tabela4 %>%
+  kbl(caption = "Tabela dos Dados") %>%
+  kable_classic(full_width = F, html_font = "Times", font_size = 12)%>%
+  scroll_box(height = "300px")
+```
+
+## Análise Descritiva
+
+```{r analise_descritiva4}
+# Poder Calorífico Superior
+y <- tabela4$PCS
+mean_and_sd <- function(y) {
+    m <- mean(y) # média
+    s <- sd(y) # desvio padrão
+    # sprintf("%0.3f U00B1 %0.3f", m, s)
+    sprintf("%0.2f $\\pm$ %0.2f", m, s)}
+Med_e_sd<- mean_and_sd(y)
+cv <- function(y) {100 * sd(y)/mean(y)}
+Coef_de_Variacao<-cv(y) # coeficiente de variação
+Coef_de_Variacao<-round(Coef_de_Variacao, 2)
+PCS<-data.frame(Med_e_sd, Coef_de_Variacao)
+
+# Carbono Fixo
+y <- tabela4$CF
+mean_and_sd <- function(y) {
+    m <- mean(y) # média
+    s <- sd(y) # desvio padrão
+    # sprintf("%0.3f U00B1 %0.3f", m, s)
+    sprintf("%0.2f $\\pm$ %0.2f", m, s)}
+Med_e_sd<- mean_and_sd(y)
+cv <- function(y) {100 * sd(y)/mean(y)}
+Coef_de_Variacao<-cv(y) # coeficiente de variação
+Coef_de_Variacao<-round(Coef_de_Variacao, 2)
+CF<-data.frame(Med_e_sd, Coef_de_Variacao)
+
+# Teor de Voláteis
+y <- tabela4$TV
+mean_and_sd <- function(y) {
+    m <- mean(y) # média
+    s <- sd(y) # desvio padrão
+    # sprintf("%0.3f U00B1 %0.3f", m, s)
+    sprintf("%0.2f $\\pm$ %0.2f", m, s)}
+Med_e_sd<- mean_and_sd(y)
+cv <- function(y) {100 * sd(y)/mean(y)}
+Coef_de_Variacao<-cv(y) # coeficiente de variação
+Coef_de_Variacao<-round(Coef_de_Variacao, 2)
+TV<-data.frame(Med_e_sd, Coef_de_Variacao)
+
+# Teor de Cinzas
+y <- tabela4$CZ
+mean_and_sd <- function(y) {
+    m <- mean(y) # média
+    s <- sd(y) # desvio padrão
+    # sprintf("%0.3f U00B1 %0.3f", m, s)
+    sprintf("%0.2f $\\pm$ %0.2f", m, s)}
+Med_e_sd<- mean_and_sd(y)
+cv <- function(y) {100 * sd(y)/mean(y)}
+Coef_de_Variacao<-cv(y) # coeficiente de variação
+Coef_de_Variacao<-round(Coef_de_Variacao, 2)
+CZ<-data.frame(Med_e_sd, Coef_de_Variacao)
+
+# Junção dos data.frame
+dados<-rbind(PCS,CF)
+dados<-rbind(dados, TV)
+dados<-rbind(dados, CZ)
+
+# Criar uma coluna com o nome das variáveis
+dados<-mutate(dados, 
+      Variaveis=c("Poder Calorífico Superior (MJ/kg)", 
+                  "Carbono Fixo", "Teor de Voláteis", "Teor de Cinzas"))
+dados<-data.frame(dados)
+
+#Organizar as colunas no data.frame
+date<-dplyr::select(dados, Variaveis, Med_e_sd, Coef_de_Variacao) 
+
+# Criar da Tabela Descritiva
+knitr::kable(date, align = 'cc', caption = "Tabela Descritiva",
+             col.names = c("Variáveis", "Média $\\pm$ sd", "  CV(%)")) %>%
+  kable_classic(full_width = F, html_font = "Times", font_size = 16)
+```
+
+### Poder Calorífico Superior - outlier
+
+```{r descritivaPCS4,  message=FALSE, warning=FALSE}
+y <- tabela4$PCS
+scale(y) # padronização da variável 
+score_z <- function(y, media = NULL, despad = NULL) {if (is.null(media)) {
+    media <- mean(y)}
+  if (is.null(despad)) {despad <- sd(y)}
+  (y - media)/despad}
+status <- ifelse(abs(score_z(y)) > 2, "outlier", "tipical") # ocorrência de outlier
+table(status)
+```
+
+### Carbono Fixo - outlier
+
+```{r descritivaCF4,  message=FALSE, warning=FALSE}
+y <- tabela4$CF
+scale(y) # padronização da variável 
+score_z <- function(y, media = NULL, despad = NULL) {if (is.null(media)) {
+    media <- mean(y)}
+  if (is.null(despad)) {despad <- sd(y)}
+  (y - media)/despad}
+status <- ifelse(abs(score_z(y)) > 2, "outlier", "tipical") # ocorrência de outlier
+table(status)
+```
+
+### Teor de Voláteis - outlier
+
+```{r descritivaTV4,  message=FALSE, warning=FALSE}
+y <- tabela4$TV
+scale(y) # padronização da variável 
+score_z <- function(y, media = NULL, despad = NULL) {if (is.null(media)) {
+    media <- mean(y)}
+  if (is.null(despad)) {despad <- sd(y)}
+  (y - media)/despad}
+status <- ifelse(abs(score_z(y)) > 2, "outlier", "tipical") # ocorrência de outlier
+table(status)
+```
+
+### Teor de Cinzas - outlier
+
+```{r descritivaCZ4,  message=FALSE, warning=FALSE}
+y <- tabela4$CZ
+scale(y) # padronização da variável 
+score_z <- function(y, media = NULL, despad = NULL) {if (is.null(media)) {
+    media <- mean(y)}
+  if (is.null(despad)) {despad <- sd(y)}
+  (y - media)/despad}
+status <- ifelse(abs(score_z(y)) > 2, "outlier", "tipical") # ocorrência de outlier
+table(status)
+```
+
+## Gráfico Box Plot
+
+```{r box plot4}
+par(mfrow=c(1,4))
+boxplot(tabela4$CF, col="blue", main="Box Plot", 
+        ylab= "Carbono Fixo (%)", adj=0.5, ylim=c(5,30))
+
+boxplot(tabela4$TV, col="purple",main="Box Plot", 
+        ylab= "Teor de Voláteis (%)", adj=0.5, ylim=c(70, 95))
+
+boxplot(tabela4$CZ,col="green2",main="Box Plot", ylab= "Teor de Cinzas (%)", 
+        adj=0.5, ylim=c(0,6)) 
+
+boxplot(tabela4$PCS,col="gray",main="Box Plot", ylab= "PCS (MJ/kg)", 
+        adj=0.5) 
+```
+
+## Matriz de correlação (valor de r e o pvalor)
+
+```{r correlação4, message=FALSE, warning=FALSE}
+
+chart.Correlation(tabela4, histogram =TRUE)
+```
+
+## Regressão Linear Múltipla 
+
+```{r regressao4}
+# Ajuste do modelo 
+modelo4<-lm(formula =PCS~-1+CF+TV+CZ, data=tabela4); modelo4
+
+# Estatísticas das estimativas dos paramentros do modelo
+summary(modelo4)
+
+# Anova da regressão do modelo
+anova(modelo4)
+```
+
+### Medidas de Precisão para Análise do Modelo
+
+```{r precisao4, message=FALSE, warning=FALSE}
+PCS4_est<- predict(modelo4)
+resid<-(tabela4$PCS-PCS4_est)
+Res2<-resid^2
+
+SQResiduo<- sum(Res2)
+
+Syx<-sqrt(SQResiduo/((length(tabela4$PCS))-3))
+
+Syx_Porc<-(Syx/(mean(tabela4$PCS)))*100
+
+Syx<-round(Syx,2)
+Syx_Porc<-round(Syx_Porc, 2)
+
+newdata33 = data.frame(Syx,Syx_Porc)
+
+# Criar da Tabela Descritiva
+knitr::kable(newdata33, align = 'cc', 
+             caption = "Medidas de Precisão do Modelo",
+             col.names = c("S$_{yx}$", "S$_{yx}$%")) %>%
+  kable_classic(full_width = F, html_font = "Times", font_size = 16)
+```
+
+### Predição do PCS aplicando o modelo
+
+```{r predicao4}
+newdatas<-data.frame(CF= c(20),TV= c(78), CZ= c(0.4))
+PCS_estimado4 = predict(modelo4, newdatas, interval = "confidence");
+PCS_estimado4 # Valores do limite de confiança dos valores preditos
+```
+
+### Testes de hipoteses
+
+NORMALIDADE:\
+**Ho: resíduos seguem distribuição normal;**\
+**Hi: resíduos não seguem distribuição normal**\
+Resultado:\
+**Valor de p \> 0.05, não rejeita Ho para alfa=5%.**
+
+```{r Normalidade4}
+## Normalidade dos Resíduos
+shapiro.test(modelo4$residuals)
+ks.test(modelo4$residuals, "pnorm")
+```
+
+INDEPENDÊNCIA DOS RESÍDUOS:\
+**Ho: resíduos são independentes;**\
+**Hi: resíduos não são independentes**\
+Resultado:\
+**Valor de p \> 0.05, não rejeita Ho para alfa=5%.**
+
+```{r Residuos4}
+## Independencia dos Resíduos (Durbin-Watson)
+durbinWatsonTest(modelo4)
+```
+
+HOMOSCEDASTICIDADE DOS RESÍDUOS:\
+**Ho: resíduos são homogênios;**\
+**Hi: resíduos não são homogênios**\
+Resultado:\
+**Valor de p \> 0.05, não rejeita Ho para alfa=5%.**
+
+```{r Homocedasticidade4}
+## Homocedasticidade (Breusch-Pagan)
+bptest(modelo4)
+ncvTest(modelo4)
+```
+
+### Gráfico 1:1 e de Resíduos
+
+**Valores em vermelho estimados; valores em azul observados.**
+
+```{r grafico_reg4}
+
+PCS4_est<-predict.lm(modelo4)
+newdata4 = data.frame(tabela4, PCS4_est)
+Res<-(((newdata4$PCS-newdata4$PCS4_est)/(newdata4$PCS))*100)
+newdata4 = data.frame(tabela4, PCS4_est,Res)
+
+G1<-ggplot(newdata4) + 
+  geom_point(size=2, aes(x=PCS, y=PCS4_est), color="red2")+
+  geom_abline(intercept = 0, slope = 1, color = "black")+
+  geom_point(size=2, aes(x=PCS4_est, y=PCS), color="blue2")+
+  theme_classic()+ # aparencia clean do gráfico
+  labs(x = "PCS Observada (MJ/kg)",
+       y = "PCS Estimada (Mj/kg)",
+       title = "Gráfico 1:1")+ # legendas
+  scale_x_continuous(breaks = seq(15, 25, 5), limits= c(15, 25))+
+  scale_y_continuous(breaks = seq(15, 25, 5), limits= c(15, 25))+
+  theme( plot.title = element_text(hjust = 0.5),
+         legend.title = element_text(hjust = 0.5))+ # centralizar títulos
+  theme(plot.title = element_text(size = 13, face = "bold"),
+        axis.title = element_text(size = 12),
+        axis.text = element_text(size = 10))  # negrito nos títulos
+
+G2<-ggplot(newdata4) + 
+  geom_point(size=2, aes(x=PCS, y=Res)
+             ,color="black")+ # gráfico de pontos
+  theme_classic()+ # aparencia clean do gráfico
+  labs(x = "PCS Observada (g/cm³)",
+       y = "Resíduo (%)",
+       title = "Gráfico de Resíduos")+ # legendas
+  scale_x_continuous(breaks = seq(15, 25, 5), limits= c(15, 25)) + 
+  scale_y_continuous(breaks = seq(-30, 30, 10), limits= c(-30,30)) +
+  theme( plot.title = element_text(hjust = 0.5),
+         legend.title = element_text(hjust = 0.5))+ # centralizar títulos
+  theme(plot.title = element_text(size = 13, face = "bold"),
+        axis.title = element_text(size = 12),
+        axis.text = element_text(size = 10))+ # negrito nos títulos
+  geom_hline(yintercept = 0, color="black")+ # linha no 0 do eixo y
+  theme(axis.title.y = element_text(angle = 90))
+
+grid.arrange(G1,G2, ncol=1) 
+```
+
+# Citações
+
+> De acordo com @grolemund2018r, a ciência de dados é uma área em crescimento.
+
+> A regressão não linear geralmente possui parâmetros interpretáveis [@ROSSE2000]. Para @Chen2021, a análise multivariada é a melhor opção.
+
+# Referências

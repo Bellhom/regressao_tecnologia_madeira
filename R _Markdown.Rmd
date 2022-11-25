@@ -1,0 +1,1964 @@
+---
+title: |
+  <center>
+  ![](https://i.imgur.com/1qIPO3t.png){ width=70%   sytle="display; left:50%" }   
+  
+    Poder Calorífico Util em função do Teor de Umidade
+author: <center> "Elaborado por Profª Drª Isabel Homczinski"
+date: <center> "`r format(Sys.time(), '%d %B, %Y')`"
+bibliography: "refs.bib"
+csl: "instituto-brasileiro-de-informacao-em-ciencia-e-tecnologia-abnt.csl"
+output: 
+    html_document:
+      highlight: zenburn
+      theme: bootstrap
+      number_sections: yes
+      toc: yes
+      toc_float:
+         collapsed: yes
+         smooth_scroll: yes
+---
+
+```{=html}
+<style> body{text-align:justify; font-family: arial; padding: 12px}
+p {text-indent: 1.5em; line-height:1.5em; font-size: 11pt;  margin-left: 3px; margin-right: 2px; 
+margin-top: 3px; margin-bottom: 2px;}
+h1{font-size: 14pt; font-weight: bold; }
+h2 {font-size: 13pt; font-weight: bold}
+h3 {font-size: 12pt; font-weight: bold}
+</style>
+```
+
+# Instalação dos pacotes
+
+> Instalação do pacote e verificação se todos estão instalados. O Comando abaixo ajuda a verificar se os pacotes estão instalados, ou se necessitam ser instalados.
+
+```{r Pacotes5, message=FALSE, warning=FALSE}
+
+pacotes <- c("tidyverse", "readxl", "ggpubr", "kableExtra", 
+             "PerformanceAnalytics", "scatterplot3d", "MASS", 
+             "gridExtra", "car", "lmtest", "plyr", "knitr", "dplyr")
+
+if(sum(as.numeric(!pacotes %in% installed.packages())) != 0){
+  instalador <- pacotes[!pacotes %in% installed.packages()]
+  for(i in 1:length(instalador)) {
+    install.packages(instalador, dependencies = T)
+    break()}
+  sapply(pacotes, require, character = T) 
+} else {
+  sapply(pacotes, require, character = T) 
+}
+
+```
+
+# Poder Calorífico Util e Teor de Umidade
+
+O Poder calorífico é uma medida da quantidade de energia térmica liberada, na forma de calor, na queima completa de 1kg de combustível. O objetivo principal dessa modelagem é verificar **se o Poder Calorífico Util tem correlação com o Teor de Umidade**. Caso haja associação entre essas variáveis, interpretar a modelagem estatística realizada. Adicionalmente, avaliar a qualidade dos dados experimentais por meio das seguintes estatísticas descritivas: média, desvio padrão, coeficiente de variação e score z. Como referência para a Área de Tecnologia da Madeira, nas disciplinas ministradas pela professora Gilmara, deve-se considerar dados de excelente qualidade **se o Coeficiente de variação tiver valor de até 10%, de 10 a 20% dados bons, de 20 a 30 % dados ruins e acima de 30% dados péssimos**. Também, no que se refere ao score Z, valores em módulo acima de 2 serão considerados como outliers (pontos atípicos). Os outliers também serão identificados por meio de gráficos box plot das variáveis do modelo.
+
+## Banco de Dados
+
+```{r arquivo, message=FALSE, warning=FALSE}
+
+tabela <- read_excel("Dados.xlsx",
+                 sheet = "Teor_umidade")
+```
+
+```{r dados, message=FALSE, warning=FALSE}
+tabela %>%
+  kbl(caption = "Tabela dos Dados", align = 'cc') %>%
+  kable_classic(full_width = T, html_font = "Times", font_size = 12)
+```
+
+## Análise Descritiva
+
+```{r analise_descritiva, message=FALSE, warning=FALSE}
+# Teor de Umidade
+y <- tabela$U
+mean_and_sd <- function(y) {
+    m <- mean(y) # média
+    s <- sd(y) # desvio padrão
+    # sprintf("%0.3f U00B1 %0.3f", m, s)
+    sprintf("%0.2f $\\pm$ %0.2f", m, s)}
+Med_e_sd<- mean_and_sd(y)
+cv <- function(y) {100 * sd(y)/mean(y)}
+Coef_de_Variacao<-cv(y) # coeficiente de variação
+Coef_de_Variacao<-round(Coef_de_Variacao, 2)
+TU<-data.frame(Med_e_sd, Coef_de_Variacao)
+
+# Poder Calorífico Util
+y <- tabela$PCU
+mean_and_sd <- function(y) {
+    m <- mean(y) # média
+    s <- sd(y) # desvio padrão
+    # sprintf("%0.3f U00B1 %0.3f", m, s)
+    sprintf("%0.2f $\\pm$ %0.2f", m, s)}
+Med_e_sd<- mean_and_sd(y)
+cv <- function(y) {100 * sd(y)/mean(y)}
+Coef_de_Variacao<-cv(y) # coeficiente de variação
+Coef_de_Variacao<-round(Coef_de_Variacao, 2)
+PCU<-data.frame(Med_e_sd, Coef_de_Variacao)
+
+# Junção dos data.frame
+dados<-rbind(TU,PCU)
+
+# Criar uma coluna com o nome das variáveis
+dados<-mutate(dados, 
+      Variaveis=c("Teor de Umidade (%)", "Poder Calorífico Util (kcal/kg)"))
+dados<-data.frame(dados)
+
+#Organizar as colunas no data.frame
+date<-dplyr::select(dados, Variaveis, Med_e_sd, Coef_de_Variacao) 
+
+# Criar da Tabela Descritiva
+knitr::kable(date, align = 'cc', caption = "Tabela Descritiva",
+             col.names = c("Variáveis", "Média $\\pm$ sd", "  CV(%)")) %>%
+  kable_classic(full_width = F, html_font = "Times", font_size = 16)
+```
+
+### Poder Calorífico Util - outlier
+
+```{r descritivaPCU, message=FALSE, warning=FALSE}
+y <- tabela$PCU
+scale(y) # padronização da variável 
+score_z <- function(y, media = NULL, despad = NULL) {if (is.null(media)) {
+    media <- mean(y)}
+  if (is.null(despad)) {despad <- sd(y)}
+  (y - media)/despad}
+status <- ifelse(abs(score_z(y)) > 2, "outlier", "tipical") # ocorrência de outlier
+table(status)
+```
+
+### Teor de Umidade - outlier
+
+```{r descritivaU,  message=FALSE, warning=FALSE}
+y <- tabela$U
+scale(y) # padronização da variável 
+score_z <- function(y, media = NULL, despad = NULL) {if (is.null(media)) {
+    media <- mean(y)}
+  if (is.null(despad)) {despad <- sd(y)}
+  (y - media)/despad}
+status <- ifelse(abs(score_z(y)) > 2, "outlier", "tipical") # ocorrência de outlier
+table(status)
+```
+
+## Gráfico Box Plot
+
+```{r box plot}
+par(mfrow=c(1,2))
+boxplot(tabela$U,
+        col="red",
+        main="Box Plot", #título,
+        ylab= "Teor de Umidade (%)", # texto do eixo y,
+        adj=0.5, #alinhamento dos textos,
+        ylim= c(0,70)) # limite do eixo y,)
+
+boxplot(tabela$PCU, col="blue", main="Box Plot", ylab= "Poder Calorífico Util (kcal/kg)", 
+      adj=0.5, ylim= c(1000,5000))
+```
+
+## Dispersão, Histograma e Correlação
+
+```{r correlação, message=FALSE, warning=FALSE}
+
+chart.Correlation(tabela, histogram =TRUE)
+```
+
+### Regressão Linear
+
+```{r regressao}
+# Ajuste do modelo 
+modelo<-lm(formula=PCU~U, data=tabela); modelo
+
+# Estatísticas das estimativas dos paramentros do modelo
+summary(modelo)
+
+# Anova da regressão do modelo
+anova(modelo)
+```
+
+### Medidas de Precisão para Análise do Modelo
+
+```{r precisao, message=FALSE, warning=FALSE}
+PCU_est<-predict.lm(modelo)
+newdata1 = data.frame(tabela, PCU_est)
+Res<-(((newdata1$PCU-newdata1$PCU_est)/(newdata1$PCU))*100)
+newdata1 = data.frame(tabela, PCU_est,Res)
+
+resid<-(newdata1$PCU-newdata1$PCU_est)
+Res2<-resid^2
+
+SQResiduo<- sum(Res2)
+
+SQTotal<-var(newdata1$PCU)*((length(newdata1$PCU))-1)
+
+R2<-(1-(SQResiduo/SQTotal))
+a<-(length(newdata1$PCU)-1)/(length(newdata1$PCU)-2)
+
+R2adj<-(1-(a*(1-R2)))
+
+Syx<-sqrt(SQResiduo/((length(newdata1$PCU))-2))
+
+Syx_Porc<-(Syx/(mean(newdata1$PCU)))*100
+
+R2<-round(R2, 2)
+R2adj<-round(R2adj,2)
+Syx<-round(Syx,2)
+Syx_Porc<-round(Syx_Porc, 2)
+
+newdata11 = data.frame(R2,R2adj,Syx,Syx_Porc)
+
+# Criar da Tabela Descritiva
+knitr::kable(newdata11, align = 'cc', 
+             caption = "Medidas de Precisão do Modelo",
+             col.names = c("R$^{2}$", "R$_{adj}^{2}$", "S$_{yx}$", "S$_{yx}$%")) %>%
+  kable_classic(full_width = F, html_font = "Times", font_size = 16)
+
+
+```
+
+### Predição do PCU aplicando o modelo
+
+```{r predicao}
+newdatas<-data.frame(U= c(50))
+PCU_estimado1 = predict(modelo, newdatas, interval = "confidence");
+PCU_estimado1 # Valores do limite de confiança dos valores preditos
+
+```
+
+### Análise Gráfica do Modelo
+
+```{r analise_grafica}
+par(mfrow=c(2,2))
+plot(modelo, pch=20)
+```
+
+### Testes de Hipóteses
+
+NORMALIDADE:\
+**Ho: resíduos seguem distribuição normal;**\
+**Hi: resíduos não seguem distribuição normal**\
+Resultado:\
+**Valor de p \> 0.05, não rejeita Ho para alfa=5%.**
+
+```{r Normalidade}
+## Normalidade dos Resíduos
+shapiro.test(modelo$residuals)
+ks.test(modelo$residuals, "pnorm")
+```
+
+INDEPENDÊNCIA DOS RESÍDUOS:\
+**Ho: resíduos são independentes;**\
+**Hi: resíduos não são independentes**\
+Resultado:\
+**Valor de p \> 0.05, não rejeita Ho para alfa=5%.**
+
+```{r Residuos}
+## Independencia dos Resíduos (Durbin-Watson)
+durbinWatsonTest(modelo)
+```
+
+HOMOSCEDASTICIDADE DOS RESÍDUOS:\
+**Ho: resíduos são homogênios;**\
+**Hi: resíduos não são homogênios;**\
+Resultado:\
+**Valor de p \> 0.05, não rejeita Ho para alfa=5%.**
+
+```{r Homocedasticidade}
+## Homocedasticidade (Breusch-Pagan)
+bptest(modelo)
+ncvTest(modelo)
+```
+
+### Gráfico 1:1 e de Resíduos
+
+**Valores em vermelho estimados; valores em azul observados.**
+
+```{r grafico_reg}
+
+G1<-ggplot(newdata1) + 
+  geom_point(size=2, aes(x=PCU, y=PCU_est), color="red2")+
+  geom_abline(intercept = 0, slope = 1, color = "black")+
+  theme_classic()+ # aparencia clean do gráfico
+  labs(x = "PCU Observado (kcal/kg)",
+       y = "PCU Estimado (kcal/kg)",
+       title = "Gráfico 1:1")+ # legendas
+ scale_x_continuous(breaks = seq(1000, 5000, 1000), limits= c(1000, 5000)) +  
+scale_y_continuous(breaks = seq(1000, 5000, 1000), limits= c(1000, 5000)) +   
+  theme( plot.title = element_text(hjust = 0.5),
+         legend.title = element_text(hjust = 0.5))+ # centralizar títulos
+  theme(plot.title = element_text(size = 13, face = "bold"),
+        axis.title = element_text(size = 12),
+        axis.text = element_text(size = 10))  # negrito nos títulos
+
+G2<-ggplot(newdata1) + 
+  geom_point(size=2, aes(x=PCU, y=Res)
+             ,color="black")+ # gráfico de pontos
+  theme_classic()+ # aparencia clean do gráfico
+  labs(x = "PCU Observado (kcal/kg)",
+       y = "Resíduo (%)",
+       title = "Gráfico de Resíduos")+ # legendas
+  scale_x_continuous(breaks = seq(1000, 5000, 1000), limits= c(1000, 5000))+   
+  scale_y_continuous(breaks = seq(-30, 30, 10), limits= c(-30,30)) + 
+    theme( plot.title = element_text(hjust = 0.5),
+         legend.title = element_text(hjust = 0.5))+ # centralizar títulos
+  theme(plot.title = element_text(size = 13, face = "bold"),
+        axis.title = element_text(size = 12),
+        axis.text = element_text(size = 10))+
+  # negrito nos títulos
+  geom_hline(yintercept = 0, color="black")+ # linha no 0 do eixo y
+  theme(axis.title.y = element_text(angle = 90))
+
+grid.arrange(G1,G2, ncol=1) 
+```
+
+## Regressão Linear
+
+```{r grafico, message=FALSE, warning=FALSE}
+
+grafico<-ggplot(data = tabela, #banco de dados
+       mapping = aes(x = U, y = PCU)) + # eixo x e y
+    geom_point(size=2) + # gráfico de dispersão
+    geom_smooth(method = "lm", # método linear 
+                formula='y ~ x', # fórmula
+                color="red", # cor
+                lwd=0.8)+ # tamanho da linha
+  theme_classic()+ # modo classico de gráfico (fundo branco)
+  stat_regline_equation(aes(label=paste(..eq.label.., # inserir a equação
+  ..rr.label.., # inserir o R2
+  sep = "~~~~")), # espaço entre a formula e o R2  
+  formula=y ~ x, # formula
+  label.x = 0, label.y=5000)+ # localização xy da formula
+  scale_x_continuous(breaks = seq(0, 70, 10), limits= c(0, 70)) + 
+  scale_y_continuous(breaks = seq(1000, 5000, 1000), limits= c(1000, 5000))+ 
+  labs(x = "Teor de Umidade (%)", # legenda do eixo x
+       y = "Poder Calorífico Util (kcal/kg)")+ # legenda do eixo y
+  theme(plot.title = element_text(hjust = 0.5),   
+         legend.title = element_text(hjust = 0.5))+ # Alinhamento do Título e eixos
+  theme(plot.title = element_text(size = 12, face = "bold",family="TT Times New Roman"),
+        axis.title = element_text(size = 12, face = "bold", family="TT Times New Roman"),
+        axis.text = element_text(size = 12, face = "bold", family="TT Times New Roman"))
+# formatação dos títulos e eixos, com tamanho da fonte (size), negrido (bold) e 
+# tipo de fonte (TI Times New Roman) 
+grafico
+```
+
+# Densidade e Propriedades Mecânicas do Combustível
+
+A densidade se refere a quantidade de combustível por unidade de volume. O objetivo principal dessa modelagem é verificar **se a Densidade tem correlação com as propriedades mecânicas do combustível (resistência e rigidez)**. Caso haja associação entre essas variáveis, interpretar a modelagem estatística realizada e a influência de cada variável no valor da densidade, por meio da comparação da magnitude dos betas da equação de regressão ajustada. Adicionalmente, avaliar a qualidade dos dados experimentais por meio das seguintes estatísticas descritivas: média, desvio padrão, coeficiente de variação e score z. Como referência para a Área de Tecnologia da Madeira, nas disciplinas ministradas pela professora Gilmara, deve-se considerar dados de excelente qualidade **se o Coeficiente de variação tiver valor de até 10%, de 10 a 20% dados bons, de 20 a 30 % dados ruins e acima de 30% dados péssimos**. Também, no que se refere ao score Z, valores em módulo acima de 2 serão considerados como outliers (pontos atípicos). Os outliers também serão identificados por meio de gráficos box plot das variáveis do modelo.
+
+## Banco de Dados
+
+```{r arquivo1, message=FALSE, warning=FALSE}
+
+tabela1 <- read_excel("Dados.xlsx",
+                 sheet = "Densidade")
+```
+
+```{r dados1}
+tabela1 %>%
+  kbl(caption = "Tabela dos Dados", align = 'cc') %>%
+  kable_classic(full_width = F, html_font = "Times", font_size = 12)%>%
+  scroll_box(width = "400px", height = "300px")
+```
+
+## Análise Descritiva
+
+```{r analise_descritiva1}
+# Densidade
+y <- tabela1$Densidade
+mean_and_sd <- function(y) {
+    m <- mean(y) # média
+    s <- sd(y) # desvio padrão
+    # sprintf("%0.3f U00B1 %0.3f", m, s)
+    sprintf("%0.0f $\\pm$ %0.2f", m, s)}
+Med_e_sd<- mean_and_sd(y)
+cv <- function(y) {100 * sd(y)/mean(y)}
+Coef_de_Variacao<-cv(y) # coeficiente de variação
+Coef_de_Variacao<-round(Coef_de_Variacao, 2)
+Densidade<-data.frame(Med_e_sd, Coef_de_Variacao)
+
+# Resistencia
+y <- tabela1$Resistencia
+mean_and_sd <- function(y) {
+    m <- mean(y) # média
+    s <- sd(y) # desvio padrão
+    # sprintf("%0.3f U00B1 %0.3f", m, s)
+    sprintf("%0.0f $\\pm$ %0.2f", m, s)}
+Med_e_sd<- mean_and_sd(y)
+cv <- function(y) {100 * sd(y)/mean(y)}
+Coef_de_Variacao<-cv(y) # coeficiente de variação
+Coef_de_Variacao<-round(Coef_de_Variacao, 2)
+Resistencia<-data.frame(Med_e_sd, Coef_de_Variacao)
+
+#Rigidez
+y <- tabela1$Rigidez
+mean_and_sd <- function(y) {
+    m <- mean(y) # média
+    s <- sd(y) # desvio padrão
+    # sprintf("%0.3f U00B1 %0.3f", m, s)
+    sprintf("%0.0f $\\pm$ %0.2f", m, s)}
+Med_e_sd<- mean_and_sd(y)
+cv <- function(y) {100 * sd(y)/mean(y)}
+Coef_de_Variacao<-cv(y) # coeficiente de variação
+Coef_de_Variacao<-round(Coef_de_Variacao, 2)
+Rigidez<-data.frame(Med_e_sd, Coef_de_Variacao)
+
+# Junção dos data.frame
+dados<-rbind(Densidade,Resistencia)
+dados<-rbind(dados, Rigidez)
+
+# Criar uma coluna com o nome das variáveis
+dados<-mutate(dados, 
+      Variaveis=c("Densidade (g/cm$^{3}$)", "Resistência (MPa)", "Rigidez (MPa)"))
+dados<-data.frame(dados)
+
+#Organizar as colunas no data.frame
+date<-dplyr::select(dados, Variaveis, Med_e_sd, Coef_de_Variacao) 
+
+# Criar da Tabela Descritiva
+knitr::kable(date, align = 'cc', caption = "Tabela Descritiva",
+             col.names = c("Variáveis", "Média $\\pm$ sd", "  CV(%)")) %>%
+  kable_classic(full_width = F, html_font = "Times", font_size = 16)
+```
+
+### Densidade - outlier
+
+```{r, descritiva_Densidade, message=FALSE, warning=FALSE}
+y <- tabela1$Densidade
+
+scale(y) # padronização da variável 
+score_z <- function(y, media = NULL, despad = NULL) {if (is.null(media)) {
+    media <- mean(y)}
+  if (is.null(despad)) {despad <- sd(y)}
+  (y - media)/despad}
+status <- ifelse(abs(score_z(y)) > 2, "outlier", "tipical") # ocorrência de outlier
+table(status)
+```
+
+### Resistência - outlier
+
+```{r descritiva_Resistencia,  message=FALSE, warning=FALSE}
+y <- tabela1$Resistencia
+scale(y) # padronização da variável 
+score_z <- function(y, media = NULL, despad = NULL) {if (is.null(media)) {
+    media <- mean(y)}
+  if (is.null(despad)) {despad <- sd(y)}
+  (y - media)/despad}
+status <- ifelse(abs(score_z(y)) > 2, "outlier", "tipical") # ocorrência de outlier
+table(status)
+```
+
+### Rigidez - outlier
+
+```{r descritiva_Rigidez,  message=FALSE, warning=FALSE}
+y <- tabela1$Rigidez
+scale(y) # padronização da variável 
+score_z <- function(y, media = NULL, despad = NULL) {if (is.null(media)) {
+    media <- mean(y)}
+  if (is.null(despad)) {despad <- sd(y)}
+  (y - media)/despad}
+status <- ifelse(abs(score_z(y)) > 2, "outlier", "tipical") # ocorrência de outlier
+table(status)
+```
+
+## Gráfico Box Plot
+
+```{r box plot1}
+par(mfrow=c(1,3))
+boxplot(tabela1$Densidade, col="blue", main="Box Plot", 
+        ylab= "Densidade (g/cm³)", adj=0.5, ylim= c(400,1200))
+
+boxplot(tabela1$Resistencia, col="purple",main="Box Plot", 
+        ylab= "Resistência (MPa)", adj=0.5, ylim= c(30,100))
+
+boxplot(tabela1$Rigidez,col="green2",main="Box Plot", ylab= "Rigidez (MPa)", 
+        adj=0.5, ylim= c(1000,30000)) 
+```
+
+## Dispersão, Histograma e Correlação
+
+```{r correlação1, message=FALSE, warning=FALSE}
+
+chart.Correlation(tabela1, histogram =TRUE)
+```
+
+## Regressão Linear Múltipla 
+
+```{r regressao1}
+# Ajuste do modelo 
+modelo1<-lm(formula =Densidade~Resistencia+Rigidez, 
+            data=tabela1); modelo1
+
+# Estatísticas das estimativas dos paramentros do modelo
+summary(modelo1)
+
+# Anova da regressão do modelo
+anova(modelo1)
+```
+
+### Medidas de Precisão para Análise do Modelo
+
+```{r precisao1}
+Densidade_est<-predict.lm(modelo1)
+newdata1 = data.frame(tabela1, Densidade_est)
+Res<-(((newdata1$Densidade-newdata1$Densidade_est)/(newdata1$Densidade))*100)
+newdata1 = data.frame(tabela1, Densidade_est,Res)
+
+resid<-(newdata1$Densidade-newdata1$Densidade_est)
+Res2<-resid^2
+
+SQResiduo<- sum(Res2)
+
+SQTotal<-var(newdata1$Densidade)*((length(newdata1$Densidade))-1)
+
+R2<-(1-(SQResiduo/SQTotal))
+a<-(length(newdata1$Densidade)-1)/(length(newdata1$Densidade)-2)
+
+R2adj<-(1-(a*(1-R2)))
+
+Syx<-sqrt(SQResiduo/((length(newdata1$Densidade))-2))
+
+Syx_Porc<-(Syx/(mean(newdata1$Densidade)))*100
+
+R2<-round(R2, 2)
+R2adj<-round(R2adj,2)
+Syx<-round(Syx,2)
+Syx_Porc<-round(Syx_Porc, 2)
+
+newdata11 = data.frame(R2,R2adj,Syx,Syx_Porc)
+
+# Criar da Tabela Descritiva
+knitr::kable(newdata11, align = 'cc', 
+             caption = "Medidas de Precisão do Modelo",
+             col.names = c("R$^{2}$", "R$_{adj}^{2}$", "S$_{yx}$", "S$_{yx}$%")) %>%
+  kable_classic(full_width = F, html_font = "Times", font_size = 16)
+
+
+```
+
+### Predição da Densidade aplicando o modelo
+
+```{r predicao1}
+newdatas<-data.frame(Resistencia= c(50),Rigidez= c(12876))
+Densidade_estimado1 = predict(modelo1, newdatas, interval = "confidence");
+Densidade_estimado1 # Valores do limite de confiança dos valores preditos
+
+```
+
+### Análise grafica do modelo
+
+```{r analise_grafica1}
+par(mfrow=c(2,2))
+plot(modelo1, pch=20)
+```
+
+### Testes de hipoteses
+
+NORMALIDADE:\
+**Ho: resíduos seguem distribuição normal;**\
+**Hi: resíduos não seguem distribuição normal**\
+Resultado:\
+**Valor de p \> 0.05, não rejeita Ho para alfa=5%.**
+
+```{r Normalidade1}
+## Normalidade dos Resíduos
+shapiro.test(modelo1$residuals)
+ks.test(modelo1$residuals, "pnorm")
+```
+
+INDEPENDÊNCIA DOS RESÍDUOS:\
+**Ho: resíduos são independentes;**\
+**Hi: resíduos não são independentes**\
+Resultado:\
+**Valor de p \> 0.05, não rejeita Ho para alfa=5%.**
+
+```{r Residuos1}
+## Independencia dos Resíduos (Durbin-Watson)
+durbinWatsonTest(modelo1)
+```
+
+HOMOSCEDASTICIDADE DOS RESÍDUOS:\
+**Ho: resíduos são homogênios;**\
+**Hi: resíduos não são homogênios;**\
+Resultado:\
+**Valor de p \> 0.05, não rejeita Ho para alfa=5%.**
+
+```{r Homocedasticidade1}
+## Homocedasticidade (Breusch-Pagan)
+bptest(modelo1)
+ncvTest(modelo1)
+```
+
+### Gráfico 1:1 e de Resíduos
+
+**Valores em vermelho estimados; valores em azul observados.**
+
+```{r grafico_reg1}
+
+G1<-ggplot(newdata1) + 
+  geom_point(size=2, aes(x=Densidade, y=Densidade_est), color="red2")+
+  geom_abline(intercept = 0, slope = 1, color = "black")+
+  geom_point(size=2, aes(x=Densidade_est, y=Densidade), color="blue2")+
+  theme_classic()+ # aparencia clean do gráfico
+  labs(x = "Densidade Observada (g/cm³)",
+       y = "Densidade Estimada (g/cm³)",
+       title = "Gráfico 1:1")+ # legendas
+  theme( plot.title = element_text(hjust = 0.5),
+         legend.title = element_text(hjust = 0.5))+ # centralizar títulos
+  theme(plot.title = element_text(size = 13, face = "bold"),
+        axis.title = element_text(size = 12),
+        axis.text = element_text(size = 10))  # negrito nos títulos
+
+G2<-ggplot(newdata1) + 
+  geom_point(size=2, aes(x=Densidade, y=Res)
+             ,color="black")+ # gráfico de pontos
+  theme_classic()+ # aparencia clean do gráfico
+  labs(x = "Densidade Observada (g/cm³)",
+       y = "Resíduo (%)",
+       title = "Gráfico de Resíduos")+ # legendas
+  scale_x_continuous(breaks = seq(450, 1250, 250), limits= c(450,1250)) + # eixo x
+  scale_y_continuous(breaks = seq(-30, 30, 10), limits= c(-30,30)) + # eixo y
+  theme( plot.title = element_text(hjust = 0.5),
+         legend.title = element_text(hjust = 0.5))+ # centralizar títulos
+  theme(plot.title = element_text(size = 13, face = "bold"),
+        axis.title = element_text(size = 12),
+        axis.text = element_text(size = 10))+
+  # negrito nos títulos
+  geom_hline(yintercept = 0, color="black")+ # linha no 0 do eixo y
+  theme(axis.title.y = element_text(angle = 90))
+
+grid.arrange(G1,G2, ncol=1) 
+```
+
+### Gráfico 3D de Dispersão em função do modelo
+
+```{r}
+graph<-scatterplot3d(tabela1$Densidade~tabela1$Resistencia+tabela1$Rigidez,
+                     pch=16, angle=45,color="blue", box=FALSE,
+                     xlab="Resistência (MPa)", ylab="Rigidez (Mpa)", zlab = "Densidade (g/cm³)")
+# previsão do modelo: Quando o modelo é apropriado todos os pontos ficam dentro
+#do plano.
+graph$plane3d(modelo1, col="black", draw_polygon=TRUE) 
+
+```
+
+### Dados Padronizados
+
+```{r padronizada1}
+tabela_padronizada1<- scale(tabela1) # padrozinação do banco de dados
+tabela_padronizada1<- data.frame(tabela_padronizada1) # tornar os dados padronizados em `data.frame`
+
+lm(formula =tabela_padronizada1$Densidade~tabela_padronizada1$Resistencia+
+     tabela_padronizada1$Rigidez,
+    data=tabela_padronizada1) # coeficientes com dados padronizados
+
+```
+
+### Método de Seleção de modelos utilizando critérios matemáticos.
+
+```{r selecao1}
+# O modelo 1 é o que nós criamos com todas as variaveis, o mod.simples é o modelo contendo apenas o intercepto. E com a função StepAIC o R roda qual seria o melhor ajuste e quais variáveis são relevantes para o modelo.
+
+modelo1<-lm(formula =tabela1$Densidade~tabela1$Resistencia+tabela1$Rigidez, data=tabela1)
+mod.simples<-lm(formula=tabela1$Densidade~1, data=tabela1)
+stepAIC(modelo1, scope=list(upper=modelo1,
+                            lower=mod.simples), direction = "backward")
+
+```
+
+# Poder Calorífico Superior e a  Composição Elementar
+
+O Poder calorífico é uma medida da quantidade de energia térmica liberada, na forma de calor, na queima completa de 1kg de combustível. O objetivo principal dessa modelagem é verificar **se o Poder Calorífico (PC) tem correlação com a Composição Elementar da biomassa (teor de carbono, hidrogênio e oxigênio)**. Caso haja associação entre essas variáveis, interpretar a modelagem estatística realizada e a influência de cada variável no valor do PC, por meio da comparação da magnitude dos betas da equação de regressão ajustada. Adicionalmente, avaliar a qualidade dos dados experimentais por meio das seguintes estatísticas descritivas: média, desvio padrão, coeficiente de variação e score z. Como referência para a Área de Tecnologia da Madeira, nas disciplinas ministradas pela professora Gilmara, deve-se considerar dados de excelente qualidade **se o Coeficiente de variação tiver valor de até 10%, de 10 a 20% dados bons, de 20 a 30 % dados ruins e acima de 30% dados péssimos**. Também, no que se refere ao score Z, valores em módulo acima de 2 serão considerados como outliers (pontos atípicos). Os outliers também serão identificados por meio de gráficos box plot das variáveis do modelo.
+
+## Banco de Dados
+
+```{r arquivo2, message=FALSE, warning=FALSE}
+
+tabela2 <- read_excel("Dados.xlsx",
+                 sheet = "Analise_elementar")
+```
+
+```{r dados2}
+tabela2 %>%
+  kbl(caption = "Tabela dos Dados", align = 'cc') %>%
+  kable_classic(full_width = F, html_font = "Times", font_size = 12)
+```
+
+## Análise Descritiva
+
+```{r analise_descritiva2}
+# Poder Calorífico Superior
+y <- tabela2$PCS
+mean_and_sd <- function(y) {
+    m <- mean(y) # média
+    s <- sd(y) # desvio padrão
+    # sprintf("%0.3f U00B1 %0.3f", m, s)
+    sprintf("%0.2f $\\pm$ %0.2f", m, s)}
+Med_e_sd<- mean_and_sd(y)
+cv <- function(y) {100 * sd(y)/mean(y)}
+Coef_de_Variacao<-cv(y) # coeficiente de variação
+Coef_de_Variacao<-round(Coef_de_Variacao, 2)
+PCS<-data.frame(Med_e_sd, Coef_de_Variacao)
+
+# Carbono
+y <- tabela2$C
+mean_and_sd <- function(y) {
+    m <- mean(y) # média
+    s <- sd(y) # desvio padrão
+    # sprintf("%0.3f U00B1 %0.3f", m, s)
+    sprintf("%0.2f $\\pm$ %0.2f", m, s)}
+Med_e_sd<- mean_and_sd(y)
+cv <- function(y) {100 * sd(y)/mean(y)}
+Coef_de_Variacao<-cv(y) # coeficiente de variação
+Coef_de_Variacao<-round(Coef_de_Variacao, 2)
+Cb<-data.frame(Med_e_sd, Coef_de_Variacao)
+
+#Hidrogenio
+y <- tabela2$H
+mean_and_sd <- function(y) {
+    m <- mean(y) # média
+    s <- sd(y) # desvio padrão
+    # sprintf("%0.3f U00B1 %0.3f", m, s)
+    sprintf("%0.2f $\\pm$ %0.2f", m, s)}
+Med_e_sd<- mean_and_sd(y)
+cv <- function(y) {100 * sd(y)/mean(y)}
+Coef_de_Variacao<-cv(y) # coeficiente de variação
+Coef_de_Variacao<-round(Coef_de_Variacao, 2)
+Hd<-data.frame(Med_e_sd, Coef_de_Variacao)
+
+#Oxigenio
+y <- tabela2$O
+mean_and_sd <- function(y) {
+    m <- mean(y) # média
+    s <- sd(y) # desvio padrão
+    # sprintf("%0.3f U00B1 %0.3f", m, s)
+    sprintf("%0.2f $\\pm$ %0.2f", m, s)}
+Med_e_sd<- mean_and_sd(y)
+cv <- function(y) {100 * sd(y)/mean(y)}
+Coef_de_Variacao<-cv(y) # coeficiente de variação
+Coef_de_Variacao<-round(Coef_de_Variacao, 2)
+Ox<-data.frame(Med_e_sd, Coef_de_Variacao)
+
+# Junção dos data.frame
+dados<-rbind(PCS,Cb)
+dados<-rbind(dados, Hd)
+dados<-rbind(dados, Ox)
+
+# Criar uma coluna com o nome das variáveis
+dados<-mutate(dados, 
+      Variaveis=c("Poder Calorífico Superior (MJ/kg)", 
+                  "Carbono (%)", "Hidrogênio (%)", "Oxigênio (%)"))
+dados<-data.frame(dados)
+
+#Organizar as colunas no data.frame
+date<-dplyr::select(dados, Variaveis, Med_e_sd, Coef_de_Variacao) 
+
+# Criar da Tabela Descritiva
+knitr::kable(date, align = 'cc', caption = "Tabela Descritiva",
+             col.names = c("Variáveis", "Média $\\pm$ sd", "  CV(%)")) %>%
+  kable_classic(full_width = F, html_font = "Times", font_size = 16)
+```
+
+### Poder Calorífico Superior - outlier
+
+```{r descritivaPCS2,  message=FALSE, warning=FALSE}
+y <- tabela2$PCS
+scale(y) # padronização da variável 
+score_z <- function(y, media = NULL, despad = NULL) {if (is.null(media)) {
+    media <- mean(y)}
+  if (is.null(despad)) {despad <- sd(y)}
+  (y - media)/despad}
+status <- ifelse(abs(score_z(y)) > 2, "outlier", "tipical") # ocorrência de outlier
+table(status)
+```
+
+### Carbono - outlier
+
+```{r descritivaC2,  message=FALSE, warning=FALSE}
+y <- tabela2$C
+scale(y) # padronização da variável 
+score_z <- function(y, media = NULL, despad = NULL) {if (is.null(media)) {
+    media <- mean(y)}
+  if (is.null(despad)) {despad <- sd(y)}
+  (y - media)/despad}
+status <- ifelse(abs(score_z(y)) > 2, "outlier", "tipical") # ocorrência de outlier
+table(status)
+```
+
+### Hidrogênio - outlier
+
+```{r descritivaH2,  message=FALSE, warning=FALSE}
+y <- tabela2$H
+scale(y) # padronização da variável 
+score_z <- function(y, media = NULL, despad = NULL) {if (is.null(media)) {
+    media <- mean(y)}
+  if (is.null(despad)) {despad <- sd(y)}
+  (y - media)/despad}
+status <- ifelse(abs(score_z(y)) > 2, "outlier", "tipical") # ocorrência de outlier
+table(status)
+```
+
+### Oxigênio - outlier
+
+```{r descritivaO2,  message=FALSE, warning=FALSE}
+y <- tabela2$O
+scale(y) # padronização da variável 
+score_z <- function(y, media = NULL, despad = NULL) {if (is.null(media)) {
+    media <- mean(y)}
+  if (is.null(despad)) {despad <- sd(y)}
+  (y - media)/despad}
+status <- ifelse(abs(score_z(y)) > 2, "outlier", "tipical") # ocorrência de outlier
+table(status)
+```
+
+## Gráfico Box Plot
+
+```{r box plot2}
+par(mfrow=c(1,4))
+boxplot(tabela2$C, col="blue", main="Box Plot", 
+        ylab= "Carbono (%)", adj=0.5, ylim=c(40,100))
+
+boxplot(tabela2$H, col="purple",main="Box Plot", 
+        ylab= "Hidrogênio (%)", adj=0.5, ylim=c(2,7))
+
+boxplot(tabela2$O,col="green2",main="Box Plot", ylab= "Oxigênio (%)", 
+        adj=0.5, ylim=c(0,50)) 
+
+boxplot(tabela2$PCS,col="gray",main="Box Plot", ylab= "PCS (MJ/kg)", 
+        adj=0.5, ylim=c(15,35)) 
+```
+
+## Dispersão, Histograma e Correlação
+
+```{r correlação2, message=FALSE, warning=FALSE}
+
+chart.Correlation(tabela2, histogram =TRUE)
+```
+
+## Regressão Linear Múltipla 
+
+```{r regressao2}
+
+# Ajuste do modelo 
+modelo2<-lm(formula =PCS~-1+C+H+O, data=tabela2); modelo2
+
+# Estatísticas das estimativas dos paramentros do modelo
+summary(modelo2)
+
+# Anova da regressão do modelo
+anova(modelo2)
+```
+
+### Predição do PCS aplicando o modelo
+
+```{r predicao2}
+newdatas<-data.frame(C= c(83),H= c(3), O= c(3))
+PCS_estimado2 = predict(modelo2, newdatas, interval = "confidence");
+PCS_estimado2 # Valores do limite de confiança dos valores preditos
+
+```
+
+### Medidas de Precisão para Análise do Modelo
+
+```{r precisao2, message=FALSE, warning=FALSE}
+PCS2_est<-predict.lm(modelo2)
+newdata1 = data.frame(tabela2, PCS2_est)
+Res<-(((newdata1$PCS-newdata1$PCS2_est)/(newdata1$PCS))*100)
+newdata1 = data.frame(tabela2, PCS2_est,Res)
+
+resid<-(newdata1$PCS-newdata1$PCS2_est)
+Res2<-resid^2
+
+SQResiduo<- sum(Res2)
+
+SQTotal<-var(newdata1$PCS)*((length(newdata1$PCS))-1)
+
+R2<-(1-(SQResiduo/SQTotal))
+a<-(length(newdata1$PCS)-1)/(length(newdata1$PCS)-2)
+
+R2adj<-(1-(a*(1-R2)))
+
+Syx<-sqrt(SQResiduo/((length(newdata1$PCS))-2))
+
+Syx_Porc<-(Syx/(mean(newdata1$PCS)))*100
+
+R2<-round(R2, 2)
+R2adj<-round(R2adj,2)
+Syx<-round(Syx,2)
+Syx_Porc<-round(Syx_Porc, 2)
+
+newdata11 = data.frame(R2,R2adj,Syx,Syx_Porc)
+
+# Criar da Tabela Descritiva
+knitr::kable(newdata11, align = 'cc', 
+             caption = "Medidas de Precisão do Modelo",
+             col.names = c("R$^{2}$", "R$_{adj}^{2}$", "S$_{yx}$", "S$_{yx}$%")) %>%
+  kable_classic(full_width = F, html_font = "Times", font_size = 16)
+
+
+```
+
+### Análise grafica do modelo
+
+```{r analise_grafica2}
+par(mfrow=c(2,2))
+plot(modelo2, pch=20)
+```
+
+### Testes de hipoteses
+
+NORMALIDADE:\
+**Ho: resíduos seguem distribuição normal;**\
+**Hi: resíduos não seguem distribuição normal**\
+Resultado:\
+**Valor de p \> 0.05, não rejeita Ho para alfa=5%.**
+
+```{r Normalidade2}
+## Normalidade dos Resíduos
+shapiro.test(modelo2$residuals)
+ks.test(modelo2$residuals, "pnorm")
+```
+
+INDEPENDÊNCIA DOS RESÍDUOS:\
+**Ho: resíduos são independentes;**\
+**Hi: resíduos não são independentes**\
+Resultado:\
+**Valor de p \> 0.05, não rejeita Ho para alfa=5%.**
+
+```{r Residuos2}
+## Independencia dos Resíduos (Durbin-Watson)
+durbinWatsonTest(modelo2)
+```
+
+HOMOSCEDASTICIDADE DOS RESÍDUOS:\
+**Ho: resíduos são homogênios;**\
+**Hi: resíduos não são homogênios;**\
+Resultado:\
+**Valor de p \> 0.05, não rejeita Ho para alfa=5%.**
+
+```{r Homocedasticidade2}
+## Homocedasticidade (Breusch-Pagan)
+bptest(modelo2)
+ncvTest(modelo2)
+```
+
+### Gráfico 1:1 e de Resíduos
+
+**Valores em vermelho estimados; valores em azul observados.**
+
+```{r grafico_reg2}
+
+G1<-ggplot(newdata1) + 
+  geom_point(size=2, aes(x=PCS, y=PCS2_est), color="red2")+
+  geom_abline(intercept = 0, slope = 1, color = "black")+
+  geom_point(size=2, aes(x=PCS2_est, y=PCS), color="blue2")+
+  theme_classic()+ # aparencia clean do gráfico
+  labs(x = "PCS Observada (MJ/kg)",
+       y = "PCS Estimada (Mj/kg)",
+       title = "Gráfico 1:1")+ # legendas
+  scale_x_continuous(breaks = seq(10, 40, 5), limits= c(10,40))+
+  scale_y_continuous(breaks = seq(10, 40, 5), limits= c(10,40))+
+  theme( plot.title = element_text(hjust = 0.5),
+         legend.title = element_text(hjust = 0.5))+ # centralizar títulos
+  theme(plot.title = element_text(size = 13, face = "bold"),
+        axis.title = element_text(size = 12),
+        axis.text = element_text(size = 10))  # negrito nos títulos
+
+G2<-ggplot(newdata1) + 
+  geom_point(size=2, aes(x=PCS, y=Res)
+             ,color="black")+ # gráfico de pontos
+  theme_classic()+ # aparencia clean do gráfico
+  labs(x = "PCS Observada (g/cm³)",
+       y = "Resíduo (%)",
+       title = "Gráfico de Resíduos")+ # legendas
+  scale_x_continuous(breaks = seq(10, 40, 5), limits= c(10,40)) + 
+  scale_y_continuous(breaks = seq(-30, 30, 10), limits= c(-30,30)) +
+  theme( plot.title = element_text(hjust = 0.5),
+         legend.title = element_text(hjust = 0.5))+ # centralizar títulos
+  theme(plot.title = element_text(size = 13, face = "bold"),
+        axis.title = element_text(size = 12),
+        axis.text = element_text(size = 10))+ # negrito nos títulos
+  geom_hline(yintercept = 0, color="black")+ # linha no 0 do eixo y
+  theme(axis.title.y = element_text(angle = 90))
+
+grid.arrange(G1,G2, ncol=1) 
+```
+
+### Dados Padronizados
+
+```{r padronizada2}
+tabela_padronizada2<- scale(tabela2) # padrozinação do banco de dados
+tabela_padronizada2<- data.frame(tabela_padronizada2) # tornar os dados padronizados em `data.frame`
+
+lm(formula =PCS~-1+C+H+O, data=tabela_padronizada2) # coeficientes com dados padronizados
+
+```
+
+### Método de Seleção de modelos utilizando critérios matemáticos.
+
+```{r selecao2}
+
+# O modelo 2 é o que nós criamos com todas as variaveis, o mod.simples é o modelo contendo apenas o intercepto. E com a função StepAIC o R roda qual seria o melhor ajuste e quais variáveis são relevantes para o modelo.
+
+modelo2<-lm(formula =PCS~-1+C+H+O, data=tabela2)
+mod.simples2<-lm(formula=PCS~1, data=tabela2)
+stepAIC(modelo2, scope=list(upper=modelo2,
+                            lower=mod.simples2), direction = "backward")
+
+```
+
+# Poder Calorífico Superior e a Composição Química
+
+O Poder calorífico é uma medida da quantidade de energia térmica liberada, na forma de calor, na queima completa de 1kg de combustível. O objetivo principal dessa modelagem é verificar **se o Poder Calorífico (PC) tem correlação com a Composição Química da biomassa (teor de lignina, polissacarídeos e extrativos)**. Caso haja associação entre essas variáveis, interpretar a modelagem estatística realizada e a influência de cada variável no valor do PC, por meio da comparação da magnitude dos betas da equação de regressão ajustada. Adicionalmente, avaliar a qualidade dos dados experimentais por meio das seguintes estatísticas descritivas: média, desvio padrão, coeficiente de variação e score z. Como referência para a Área de Tecnologia da Madeira, nas disciplinas ministradas pela professora Gilmara, deve-se considerar dados de excelente qualidade **se o Coeficiente de variação tiver valor de até 10%, de 10 a 20% dados bons, de 20 a 30 % dados ruins e acima de 30% dados péssimos**. Também, no que se refere ao score Z, valores em módulo acima de 2 serão considerados como outliers (pontos atípicos). Os outliers também serão identificados por meio de gráficos box plot das variáveis do modelo.
+
+## Banco de Dados
+
+```{r arquivo3, message=FALSE, warning=FALSE}
+
+tabela3 <- read_excel("Dados.xlsx",
+                 sheet = "Composicao_quimica")
+```
+
+```{r dados3}
+tabela3 %>%
+  kbl(caption = "Tabela dos Dados", align = 'cc') %>%
+  kable_classic(full_width = F, html_font = "Times", font_size = 12)
+```
+
+## Análise Descritiva
+
+```{r analise_descritiva3}
+# Poder Calorífico Superior
+y <- tabela3$PCS
+mean_and_sd <- function(y) {
+    m <- mean(y) # média
+    s <- sd(y) # desvio padrão
+    # sprintf("%0.3f U00B1 %0.3f", m, s)
+    sprintf("%0.2f $\\pm$ %0.2f", m, s)}
+Med_e_sd<- mean_and_sd(y)
+cv <- function(y) {100 * sd(y)/mean(y)}
+Coef_de_Variacao<-cv(y) # coeficiente de variação
+Coef_de_Variacao<-round(Coef_de_Variacao, 2)
+PCS<-data.frame(Med_e_sd, Coef_de_Variacao)
+
+# Extrativos
+y <- tabela3$extrativos
+mean_and_sd <- function(y) {
+    m <- mean(y) # média
+    s <- sd(y) # desvio padrão
+    # sprintf("%0.3f U00B1 %0.3f", m, s)
+    sprintf("%0.2f $\\pm$ %0.2f", m, s)}
+Med_e_sd<- mean_and_sd(y)
+cv <- function(y) {100 * sd(y)/mean(y)}
+Coef_de_Variacao<-cv(y) # coeficiente de variação
+Coef_de_Variacao<-round(Coef_de_Variacao, 2)
+extrativos<-data.frame(Med_e_sd, Coef_de_Variacao)
+
+# Lignina
+y <- tabela3$lignina
+mean_and_sd <- function(y) {
+    m <- mean(y) # média
+    s <- sd(y) # desvio padrão
+    # sprintf("%0.3f U00B1 %0.3f", m, s)
+    sprintf("%0.2f $\\pm$ %0.2f", m, s)}
+Med_e_sd<- mean_and_sd(y)
+cv <- function(y) {100 * sd(y)/mean(y)}
+Coef_de_Variacao<-cv(y) # coeficiente de variação
+Coef_de_Variacao<-round(Coef_de_Variacao, 2)
+lignina<-data.frame(Med_e_sd, Coef_de_Variacao)
+
+# Holocelulose
+y <- tabela3$holocelulose
+mean_and_sd <- function(y) {
+    m <- mean(y) # média
+    s <- sd(y) # desvio padrão
+    # sprintf("%0.3f U00B1 %0.3f", m, s)
+    sprintf("%0.2f $\\pm$ %0.2f", m, s)}
+Med_e_sd<- mean_and_sd(y)
+cv <- function(y) {100 * sd(y)/mean(y)}
+Coef_de_Variacao<-cv(y) # coeficiente de variação
+Coef_de_Variacao<-round(Coef_de_Variacao, 2)
+holocelulose<-data.frame(Med_e_sd, Coef_de_Variacao)
+
+# Junção dos data.frame
+dados<-rbind(PCS,extrativos)
+dados<-rbind(dados, lignina)
+dados<-rbind(dados, holocelulose)
+
+# Criar uma coluna com o nome das variáveis
+dados<-mutate(dados, 
+      Variaveis=c("Poder Calorífico Superior (MJ/kg)", 
+                  "Extrativos", "Lignina", "Holocelulose"))
+dados<-data.frame(dados)
+
+#Organizar as colunas no data.frame
+date<-dplyr::select(dados, Variaveis, Med_e_sd, Coef_de_Variacao) 
+
+# Criar da Tabela Descritiva
+knitr::kable(date, align = 'cc', caption = "Tabela Descritiva",
+             col.names = c("Variáveis", "Média $\\pm$ sd", "  CV(%)")) %>%
+  kable_classic(full_width = F, html_font = "Times", font_size = 16)
+```
+
+### Poder Calorífico Superior - outlier
+
+```{r descritivaPCS1,  message=FALSE, warning=FALSE}
+y <- tabela3$PCS
+scale(y) # padronização da variável 
+score_z <- function(y, media = NULL, despad = NULL) {if (is.null(media)) {
+    media <- mean(y)}
+  if (is.null(despad)) {despad <- sd(y)}
+  (y - media)/despad}
+status <- ifelse(abs(score_z(y)) > 2, "outlier", "tipical") # ocorrência de outlier
+table(status)
+```
+
+### Extrativos - outlier
+
+```{r descritivaextrativos,  message=FALSE, warning=FALSE}
+y <- tabela3$extrativos
+scale(y) # padronização da variável 
+score_z <- function(y, media = NULL, despad = NULL) {if (is.null(media)) {
+    media <- mean(y)}
+  if (is.null(despad)) {despad <- sd(y)}
+  (y - media)/despad}
+status <- ifelse(abs(score_z(y)) > 2, "outlier", "tipical") # ocorrência de outlier
+table(status)
+```
+
+### Lignina - outlier
+
+```{r descritivalignina,  message=FALSE, warning=FALSE}
+y <- tabela3$lignina
+scale(y) # padronização da variável 
+score_z <- function(y, media = NULL, despad = NULL) {if (is.null(media)) {
+    media <- mean(y)}
+  if (is.null(despad)) {despad <- sd(y)}
+  (y - media)/despad}
+status <- ifelse(abs(score_z(y)) > 2, "outlier", "tipical") # ocorrência de outlier
+table(status)
+```
+
+### Holocelulose - outlier
+
+```{r descritivaholocelulose,  message=FALSE, warning=FALSE}
+y <- tabela3$holocelulose
+scale(y) # padronização da variável 
+score_z <- function(y, media = NULL, despad = NULL) {if (is.null(media)) {
+    media <- mean(y)}
+  if (is.null(despad)) {despad <- sd(y)}
+  (y - media)/despad}
+status <- ifelse(abs(score_z(y)) > 2, "outlier", "tipical") # ocorrência de outlier
+table(status)
+```
+
+## Gráfico Box Plot
+
+```{r box plot3}
+par(mfrow=c(1,4))
+boxplot(tabela3$extrativos, col="blue", main="Box Plot", 
+        ylab= "Extrativos", adj=0.5, ylim=c(0,4))
+
+boxplot(tabela3$lignina, col="purple",main="Box Plot", 
+        ylab= "Lignina", adj=0.5, ylim=c(26,32))
+
+boxplot(tabela3$holocelulose,col="green2",main="Box Plot", ylab= "Holocelulose", 
+        adj=0.5, ylim=c(64,72)) 
+
+boxplot(tabela3$PCS,col="gray",main="Box Plot", ylab= "PCS (MJ/kg)", 
+        adj=0.5, ylim=c(17.0,17.8)) 
+```
+
+## Dispersão, Histograma e Correlação
+
+```{r correlação3, message=FALSE, warning=FALSE}
+
+chart.Correlation(tabela3, histogram =TRUE)
+```
+
+## Regressão Linear Múltipla 
+
+```{r regressao3}
+
+# Ajuste do modelo 
+modelo3<-lm(formula =PCS~-1+extrativos+lignina+holocelulose, data=tabela3) 
+modelo3
+
+# Estatísticas das estimativas dos paramentros do modelo
+summary(modelo3)
+
+# Anova da regressão do modelo
+anova(modelo3)
+```
+
+### Medidas de Precisão para Análise do Modelo
+
+```{r precisao3, message=FALSE, warning=FALSE}
+
+PCS3_est<- predict(modelo3)
+resid<-(tabela3$PCS-PCS3_est)
+Res2<-resid^2
+SQResiduo<- sum(Res2)
+
+Syx<-sqrt(SQResiduo/((length(tabela3$PCS))-3))
+
+Syx_Porc<-(Syx/(mean(tabela3$PCS)))*100
+
+Syx<-round(Syx,2)
+Syx_Porc<-round(Syx_Porc, 2)
+
+newdata33 = data.frame(Syx,Syx_Porc)
+
+# Criar da Tabela Descritiva
+knitr::kable(newdata33, align = 'cc', 
+             caption = "Medidas de Precisão do Modelo",
+             col.names = c("S$_{yx}$", "S$_{yx}$%")) %>%
+  kable_classic(full_width = F, html_font = "Times", font_size = 16)
+
+```
+
+### Predição do PCS aplicando o modelo
+
+```{r predicao3}
+newdatas<-data.frame(extrativos= c(1.25),lignina= c(30), holocelulose= c(68))
+PCS_estimado1 = predict(modelo3, newdatas, interval = "confidence");
+PCS_estimado1 # Valores do limite de confiança dos valores preditos
+```
+
+### Análise grafica do modelo
+
+```{r analise_grafica3}
+par(mfrow=c(2,2))
+plot(modelo3, pch=20)
+```
+
+### Testes de hipoteses
+
+NORMALIDADE:\
+**Ho: resíduos seguem distribuição normal;**\
+**Hi: resíduos não seguem distribuição normal**\
+Resultado:\
+**Valor de p \> 0.05, não rejeita Ho para alfa=5%.**
+
+```{r Normalidade3}
+## Normalidade dos Resíduos
+shapiro.test(modelo3$residuals)
+ks.test(modelo3$residuals, "pnorm")
+```
+
+INDEPENDÊNCIA DOS RESÍDUOS:\
+**Ho: resíduos são independentes;**\
+**Hi: resíduos não são independentes**\
+Resultado:\
+**Valor de p \> 0.05, não rejeita Ho para alfa=5%.**
+
+```{r Residuos3}
+## Independencia dos Resíduos (Durbin-Watson)
+durbinWatsonTest(modelo3)
+```
+
+HOMOSCEDASTICIDADE DOS RESÍDUOS:\
+**Ho: resíduos são homogênios;**\
+**Hi: resíduos não são homogênios;**\
+Resultado:\
+**Valor de p \> 0.05, não rejeita Ho para alfa=5%.**
+
+```{r Homocedasticidade3}
+## Homocedasticidade (Breusch-Pagan)
+bptest(modelo3)
+ncvTest(modelo3)
+```
+
+### Gráfico 1:1 e de Resíduos
+
+**Valores em vermelho estimados; valores em azul observados.**
+
+```{r grafico_reg3}
+
+PCS3_est<-predict.lm(modelo3)
+newdata3 = data.frame(tabela3, PCS3_est)
+Res<-(((newdata3$PCS-newdata3$PCS3_est)/(newdata3$PCS))*100)
+newdata3 = data.frame(tabela3, PCS3_est,Res)
+
+G1<-ggplot(newdata3) + 
+  geom_point(size=2, aes(x=PCS, y=PCS3_est), color="red2")+
+  geom_abline(intercept = 0, slope = 1, color = "black")+
+  geom_point(size=2, aes(x=PCS3_est, y=PCS), color="blue2")+
+  theme_classic()+ # aparencia clean do gráfico
+  labs(x = "PCS Observada (MJ/kg)",
+       y = "PCS Estimada (Mj/kg)",
+       title = "Gráfico 1:1")+ # legendas
+  scale_x_continuous(breaks = seq(17.0, 18.0, 0.20), limits= c(17.0, 18.0))+
+  scale_y_continuous(breaks = seq(17.0, 18.0, 0.20), limits= c(17.0, 18.0))+
+  theme( plot.title = element_text(hjust = 0.5),
+         legend.title = element_text(hjust = 0.5))+ # centralizar títulos
+  theme(plot.title = element_text(size = 13, face = "bold"),
+        axis.title = element_text(size = 12),
+        axis.text = element_text(size = 10))  # negrito nos títulos
+
+G2<-ggplot(newdata3) + 
+  geom_point(size=2, aes(x=PCS, y=Res)
+             ,color="black")+ # gráfico de pontos
+  theme_classic()+ # aparencia clean do gráfico
+  labs(x = "PCS Observada (g/cm³)",
+       y = "Resíduo (%)",
+       title = "Gráfico de Resíduos")+ # legendas
+  scale_x_continuous(breaks = seq(17.0, 18.0, 0.20), limits= c(17.0, 18.0)) + 
+  scale_y_continuous(breaks = seq(-30, 30, 10), limits= c(-30,30)) +
+  theme( plot.title = element_text(hjust = 0.5),
+         legend.title = element_text(hjust = 0.5))+ # centralizar títulos
+  theme(plot.title = element_text(size = 13, face = "bold"),
+        axis.title = element_text(size = 12),
+        axis.text = element_text(size = 10))+ # negrito nos títulos
+  geom_hline(yintercept = 0, color="black")+ # linha no 0 do eixo y
+  theme(axis.title.y = element_text(angle = 90))
+
+grid.arrange(G1,G2, ncol=1) 
+```
+
+### Dados Padronizados
+
+```{r padronizada3}
+tabela_padronizada3<- scale(tabela3) # padrozinação do banco de dados
+tabela_padronizada3<- data.frame(tabela_padronizada3) # tornar os dados padronizados em `data.frame`
+
+lm(formula =PCS~-1+extrativos+lignina+holocelulose, data=tabela_padronizada3) # coeficientes com dados padronizados
+
+```
+
+### Método de Seleção de modelos utilizando critérios matemáticos.
+
+```{r selecao3}
+
+modelo3<-lm(formula =PCS~-1+extrativos+lignina+holocelulose, data=tabela3)
+mod.simples3<-lm(formula=PCS~1, data=tabela3)
+stepAIC(modelo3, scope=list(upper=modelo3,
+                            lower=mod.simples3), direction = "backward")
+
+```
+
+# Poder Calorífico Superior e a Composição Imediata
+
+O Poder calorífico é uma medida da quantidade de energia térmica liberada, na forma de calor, na queima completa de 1kg de combustível. O objetivo principal dessa modelagem é verificar **se o Poder Calorífico (PC) tem correlação com a Composição Imediata da biomassa (teor de carbono fixo, voláteis e cinzas)**. Caso haja associação entre essas variáveis, interpretar a modelagem estatística realizada e a influência de cada variável no valor do PC, por meio da comparação da magnitude dos betas da equação de regressão ajustada. Adicionalmente, avaliar a qualidade dos dados experimentais por meio das seguintes estatísticas descritivas: média, desvio padrão, coeficiente de variação e score z. Como referência para a Área de Tecnologia da Madeira, nas disciplinas ministradas pela professora Gilmara, deve-se considerar dados de excelente qualidade **se o Coeficiente de variação tiver valor de até 10%, de 10 a 20% dados bons, de 20 a 30 % dados ruins e acima de 30% dados péssimos**. Também, no que se refere ao score Z, valores em módulo acima de 2 serão considerados como outliers (pontos atípicos). Os outliers também serão identificados por meio de gráficos box plot das variáveis do modelo.
+
+## Banco de Dados
+
+```{r arquivo4, message=FALSE, warning=FALSE}
+
+tabela4 <- read_excel("Dados.xlsx",
+                 sheet = "Analise_imediata")
+```
+
+```{r dados4_1}
+tabela4 %>%
+  kbl(caption = "Tabela dos Dados") %>%
+  kable_classic(full_width = F, html_font = "Times", font_size = 12)%>%
+  scroll_box(height = "300px")
+```
+
+## Análise Descritiva
+
+```{r analise_descritiva4}
+# Poder Calorífico Superior
+y <- tabela4$PCS
+mean_and_sd <- function(y) {
+    m <- mean(y) # média
+    s <- sd(y) # desvio padrão
+    # sprintf("%0.3f U00B1 %0.3f", m, s)
+    sprintf("%0.2f $\\pm$ %0.2f", m, s)}
+Med_e_sd<- mean_and_sd(y)
+cv <- function(y) {100 * sd(y)/mean(y)}
+Coef_de_Variacao<-cv(y) # coeficiente de variação
+Coef_de_Variacao<-round(Coef_de_Variacao, 2)
+PCS<-data.frame(Med_e_sd, Coef_de_Variacao)
+
+# Carbono Fixo
+y <- tabela4$CF
+mean_and_sd <- function(y) {
+    m <- mean(y) # média
+    s <- sd(y) # desvio padrão
+    # sprintf("%0.3f U00B1 %0.3f", m, s)
+    sprintf("%0.2f $\\pm$ %0.2f", m, s)}
+Med_e_sd<- mean_and_sd(y)
+cv <- function(y) {100 * sd(y)/mean(y)}
+Coef_de_Variacao<-cv(y) # coeficiente de variação
+Coef_de_Variacao<-round(Coef_de_Variacao, 2)
+CF<-data.frame(Med_e_sd, Coef_de_Variacao)
+
+# Teor de Voláteis
+y <- tabela4$TV
+mean_and_sd <- function(y) {
+    m <- mean(y) # média
+    s <- sd(y) # desvio padrão
+    # sprintf("%0.3f U00B1 %0.3f", m, s)
+    sprintf("%0.2f $\\pm$ %0.2f", m, s)}
+Med_e_sd<- mean_and_sd(y)
+cv <- function(y) {100 * sd(y)/mean(y)}
+Coef_de_Variacao<-cv(y) # coeficiente de variação
+Coef_de_Variacao<-round(Coef_de_Variacao, 2)
+TV<-data.frame(Med_e_sd, Coef_de_Variacao)
+
+# Teor de Cinzas
+y <- tabela4$CZ
+mean_and_sd <- function(y) {
+    m <- mean(y) # média
+    s <- sd(y) # desvio padrão
+    # sprintf("%0.3f U00B1 %0.3f", m, s)
+    sprintf("%0.2f $\\pm$ %0.2f", m, s)}
+Med_e_sd<- mean_and_sd(y)
+cv <- function(y) {100 * sd(y)/mean(y)}
+Coef_de_Variacao<-cv(y) # coeficiente de variação
+Coef_de_Variacao<-round(Coef_de_Variacao, 2)
+CZ<-data.frame(Med_e_sd, Coef_de_Variacao)
+
+# Junção dos data.frame
+dados<-rbind(PCS,CF)
+dados<-rbind(dados, TV)
+dados<-rbind(dados, CZ)
+
+# Criar uma coluna com o nome das variáveis
+dados<-mutate(dados, 
+      Variaveis=c("Poder Calorífico Superior (MJ/kg)", 
+                  "Carbono Fixo", "Teor de Voláteis", "Teor de Cinzas"))
+dados<-data.frame(dados)
+
+#Organizar as colunas no data.frame
+date<-dplyr::select(dados, Variaveis, Med_e_sd, Coef_de_Variacao) 
+
+# Criar da Tabela Descritiva
+knitr::kable(date, align = 'cc', caption = "Tabela Descritiva",
+             col.names = c("Variáveis", "Média $\\pm$ sd", "  CV(%)")) %>%
+  kable_classic(full_width = F, html_font = "Times", font_size = 16)
+```
+
+### Poder Calorífico Superior - outlier
+
+```{r descritivaPCS4,  message=FALSE, warning=FALSE}
+y <- tabela4$PCS
+scale(y) # padronização da variável 
+score_z <- function(y, media = NULL, despad = NULL) {if (is.null(media)) {
+    media <- mean(y)}
+  if (is.null(despad)) {despad <- sd(y)}
+  (y - media)/despad}
+status <- ifelse(abs(score_z(y)) > 2, "outlier", "tipical") # ocorrência de outlier
+table(status)
+```
+
+### Carbono Fixo - outlier
+
+```{r descritivaCF4,  message=FALSE, warning=FALSE}
+y <- tabela4$CF
+scale(y) # padronização da variável 
+score_z <- function(y, media = NULL, despad = NULL) {if (is.null(media)) {
+    media <- mean(y)}
+  if (is.null(despad)) {despad <- sd(y)}
+  (y - media)/despad}
+status <- ifelse(abs(score_z(y)) > 2, "outlier", "tipical") # ocorrência de outlier
+table(status)
+```
+
+### Teor de Voláteis - outlier
+
+```{r descritivaTV4,  message=FALSE, warning=FALSE}
+y <- tabela4$TV
+scale(y) # padronização da variável 
+score_z <- function(y, media = NULL, despad = NULL) {if (is.null(media)) {
+    media <- mean(y)}
+  if (is.null(despad)) {despad <- sd(y)}
+  (y - media)/despad}
+status <- ifelse(abs(score_z(y)) > 2, "outlier", "tipical") # ocorrência de outlier
+table(status)
+```
+
+### Teor de Cinzas - outlier
+
+```{r descritivaCZ4,  message=FALSE, warning=FALSE}
+y <- tabela4$CZ
+scale(y) # padronização da variável 
+score_z <- function(y, media = NULL, despad = NULL) {if (is.null(media)) {
+    media <- mean(y)}
+  if (is.null(despad)) {despad <- sd(y)}
+  (y - media)/despad}
+status <- ifelse(abs(score_z(y)) > 2, "outlier", "tipical") # ocorrência de outlier
+table(status)
+```
+
+## Gráfico Box Plot
+
+```{r box plot4}
+par(mfrow=c(1,4))
+boxplot(tabela4$CF, col="blue", main="Box Plot", 
+        ylab= "Carbono Fixo (%)", adj=0.5, ylim=c(5,30))
+
+boxplot(tabela4$TV, col="purple",main="Box Plot", 
+        ylab= "Teor de Voláteis (%)", adj=0.5, ylim=c(70, 95))
+
+boxplot(tabela4$CZ,col="green2",main="Box Plot", ylab= "Teor de Cinzas (%)", 
+        adj=0.5, ylim=c(0,6)) 
+
+boxplot(tabela4$PCS,col="gray",main="Box Plot", ylab= "PCS (MJ/kg)", 
+        adj=0.5) 
+```
+
+## Matriz de correlação (valor de r e o pvalor)
+
+```{r correlação4, message=FALSE, warning=FALSE}
+
+chart.Correlation(tabela4, histogram =TRUE)
+```
+
+## Regressão Linear Múltipla 
+
+```{r regressao4}
+# Ajuste do modelo 
+modelo4<-lm(formula =PCS~-1+CF+TV+CZ, data=tabela4); modelo4
+
+# Estatísticas das estimativas dos paramentros do modelo
+summary(modelo4)
+
+# Anova da regressão do modelo
+anova(modelo4)
+```
+
+### Medidas de Precisão para Análise do Modelo
+
+```{r precisao4, message=FALSE, warning=FALSE}
+PCS4_est<- predict(modelo4)
+resid<-(tabela4$PCS-PCS4_est)
+Res2<-resid^2
+
+SQResiduo<- sum(Res2)
+
+Syx<-sqrt(SQResiduo/((length(tabela4$PCS))-3))
+
+Syx_Porc<-(Syx/(mean(tabela4$PCS)))*100
+
+Syx<-round(Syx,2)
+Syx_Porc<-round(Syx_Porc, 2)
+
+newdata33 = data.frame(Syx,Syx_Porc)
+
+# Criar da Tabela Descritiva
+knitr::kable(newdata33, align = 'cc', 
+             caption = "Medidas de Precisão do Modelo",
+             col.names = c("S$_{yx}$", "S$_{yx}$%")) %>%
+  kable_classic(full_width = F, html_font = "Times", font_size = 16)
+```
+
+### Predição do PCS aplicando o modelo
+
+```{r predicao4}
+newdatas<-data.frame(CF= c(20),TV= c(78), CZ= c(0.4))
+PCS_estimado4 = predict(modelo4, newdatas, interval = "confidence");
+PCS_estimado4 # Valores do limite de confiança dos valores preditos
+```
+
+### Análise grafica do modelo
+
+```{r analise_grafica4}
+par(mfrow=c(2,2))
+plot(modelo4, pch=20)
+```
+
+### Testes de hipoteses
+
+NORMALIDADE:\
+**Ho: resíduos seguem distribuição normal;**\
+**Hi: resíduos não seguem distribuição normal**\
+Resultado:\
+**Valor de p \> 0.05, não rejeita Ho para alfa=5%.**
+
+```{r Normalidade4}
+## Normalidade dos Resíduos
+shapiro.test(modelo4$residuals)
+ks.test(modelo4$residuals, "pnorm")
+```
+
+INDEPENDÊNCIA DOS RESÍDUOS:\
+**Ho: resíduos são independentes;**\
+**Hi: resíduos não são independentes**\
+Resultado:\
+**Valor de p \> 0.05, não rejeita Ho para alfa=5%.**
+
+```{r Residuos4}
+## Independencia dos Resíduos (Durbin-Watson)
+durbinWatsonTest(modelo4)
+```
+
+HOMOSCEDASTICIDADE DOS RESÍDUOS:\
+**Ho: resíduos são homogênios;**\
+**Hi: resíduos não são homogênios;**\
+Resultado:\
+**Valor de p \> 0.05, não rejeita Ho para alfa=5%.**
+
+```{r Homocedasticidade4}
+## Homocedasticidade (Breusch-Pagan)
+bptest(modelo4)
+ncvTest(modelo4)
+```
+
+### Gráfico 1:1 e de Resíduos
+
+**Valores em vermelho estimados; valores em azul observados.**
+
+```{r grafico_reg4}
+
+PCS4_est<-predict.lm(modelo4)
+newdata4 = data.frame(tabela4, PCS4_est)
+Res<-(((newdata4$PCS-newdata4$PCS4_est)/(newdata4$PCS))*100)
+newdata4 = data.frame(tabela4, PCS4_est,Res)
+
+G1<-ggplot(newdata4) + 
+  geom_point(size=2, aes(x=PCS, y=PCS4_est), color="red2")+
+  geom_abline(intercept = 0, slope = 1, color = "black")+
+  geom_point(size=2, aes(x=PCS4_est, y=PCS), color="blue2")+
+  theme_classic()+ # aparencia clean do gráfico
+  labs(x = "PCS Observada (MJ/kg)",
+       y = "PCS Estimada (Mj/kg)",
+       title = "Gráfico 1:1")+ # legendas
+  scale_x_continuous(breaks = seq(15, 25, 5), limits= c(15, 25))+
+  scale_y_continuous(breaks = seq(15, 25, 5), limits= c(15, 25))+
+  theme( plot.title = element_text(hjust = 0.5),
+         legend.title = element_text(hjust = 0.5))+ # centralizar títulos
+  theme(plot.title = element_text(size = 13, face = "bold"),
+        axis.title = element_text(size = 12),
+        axis.text = element_text(size = 10))  # negrito nos títulos
+
+G2<-ggplot(newdata4) + 
+  geom_point(size=2, aes(x=PCS, y=Res)
+             ,color="black")+ # gráfico de pontos
+  theme_classic()+ # aparencia clean do gráfico
+  labs(x = "PCS Observada (g/cm³)",
+       y = "Resíduo (%)",
+       title = "Gráfico de Resíduos")+ # legendas
+  scale_x_continuous(breaks = seq(15, 25, 5), limits= c(15, 25)) + 
+  scale_y_continuous(breaks = seq(-30, 30, 10), limits= c(-30,30)) +
+  theme( plot.title = element_text(hjust = 0.5),
+         legend.title = element_text(hjust = 0.5))+ # centralizar títulos
+  theme(plot.title = element_text(size = 13, face = "bold"),
+        axis.title = element_text(size = 12),
+        axis.text = element_text(size = 10))+ # negrito nos títulos
+  geom_hline(yintercept = 0, color="black")+ # linha no 0 do eixo y
+  theme(axis.title.y = element_text(angle = 90))
+
+grid.arrange(G1,G2, ncol=1) 
+```
+
+### Dados Padronizados
+
+```{r padronizada4}
+tabela_padronizada4<- scale(tabela4) # padrozinação do banco de dados
+tabela_padronizada4<- data.frame(tabela_padronizada4) # tornar os dados padronizados em `data.frame`
+
+lm(lm(formula =PCS~-1+CF+TV+CZ, data=tabela_padronizada4)) # coeficientes com dados padronizados
+
+```
+
+### Método de Seleção de modelos utilizando critérios matemáticos.
+
+```{r selecao4}
+
+modelo4<-lm(formula =PCS~-1+CF+TV+CZ, data=tabela4)
+mod.simples4<-lm(formula=PCS~1, data=tabela4)
+stepAIC(modelo4, scope=list(upper=modelo4,
+                            lower=mod.simples4), direction = "backward")
+
+```
+
+# Poder Calorífico Superior e a Densidade Básica
+
+A densidade básica se refere a quantidade de combustível seco (lenha) por unidade de volume saturado, sendo uma propriedade física importante na caracterização de um combustível a base de biomassa. O objetivo principal dessa modelagem é verificar **se as Propriedades Energéticas do combustível (Poder Calorífico) tem correlação com a Densidade Básica**. Caso haja associação entre essas variáveis, interpretar a modelagem estatística realizada e a influência da Densidade Básica no valor do Poder Calorífico, através da magnitude do beta 1 da equação de regressão ajustada. Adicionalmente, avaliar a qualidade dos dados experimentais por meio das seguintes estatísticas descritivas: média, desvio padrão, coeficiente de variação e score z. Como referência para a Área de Tecnologia da Madeira, nas disciplinas ministradas pela professora Gilmara, deve-se considerar dados de excelente qualidade **se o Coeficiente de variação tiver valor de até 10%, de 10 a 20% dados bons, de 20 a 30 % dados ruins e acima de 30% dados péssimos**. Também, no que se refere ao score Z, valores em módulo acima de 2 serão considerados como outliers (pontos atípicos). Os outliers também serão identificados por meio de gráficos box plot das variáveis do modelo.
+
+## Banco de Dados
+
+```{r arquivo5, message=FALSE, warning=FALSE}
+
+tabela5 <- read_excel("Dados.xlsx",
+                 sheet = "PCxDb")
+```
+
+```{r dados5}
+tabela5 %>%
+  kbl(caption = "Tabela dos Dados") %>%
+  kable_classic(full_width = F, html_font = "Times", font_size = 12)%>%
+  scroll_box(width = "300px", height = "300px")
+```
+
+## Análise Descritiva
+
+```{r analise_descritiva5}
+# Poder Calorífico
+y <- tabela5$PCS
+mean_and_sd <- function(y) {
+    m <- mean(y) # média
+    s <- sd(y) # desvio padrão
+    # sprintf("%0.3f U00B1 %0.3f", m, s)
+    sprintf("%0.0f $\\pm$ %0.2f", m, s)}
+Med_e_sd<- mean_and_sd(y)
+cv <- function(y) {100 * sd(y)/mean(y)}
+Coef_de_Variacao<-cv(y) # coeficiente de variação
+Coef_de_Variacao<-round(Coef_de_Variacao, 2)
+PCS2<-data.frame(Med_e_sd, Coef_de_Variacao)
+
+# Densidade Básica
+y <- tabela5$Db
+mean_and_sd <- function(y) {
+    m <- mean(y) # média
+    s <- sd(y) # desvio padrão
+    # sprintf("%0.3f U00B1 %0.3f", m, s)
+    sprintf("%0.2f $\\pm$ %0.2f", m, s)}
+Med_e_sd<- mean_and_sd(y)
+cv <- function(y) {100 * sd(y)/mean(y)}
+Coef_de_Variacao<-cv(y) # coeficiente de variação
+Coef_de_Variacao<-round(Coef_de_Variacao, 2)
+Db<-data.frame(Med_e_sd, Coef_de_Variacao)
+
+# Junção dos data.frame
+dados<-rbind(Db,PCS2)
+
+# Criar uma coluna com o nome das variáveis
+dados<-mutate(dados, 
+      Variaveis=c("Densidade (g/cm$^{3}$)", "Poder Calorífico (MJ/kg)"))
+dados<-data.frame(dados)
+
+#Organizar as colunas no data.frame
+date<-dplyr::select(dados, Variaveis, Med_e_sd, Coef_de_Variacao) 
+
+# Criar da Tabela Descritiva
+knitr::kable(date, align = 'cc', caption = "Tabela Descritiva",
+             col.names = c("Variáveis", "Média $\\pm$ sd", "  CV(%)")) %>%
+  kable_classic(full_width = F, html_font = "Times", font_size = 16)
+```
+
+### Poder Calorífico Superior - outlier
+
+```{r descritivaPC5,  message=FALSE, warning=FALSE}
+y <- tabela5$PCS
+scale(y) # padronização da variável 
+score_z <- function(y, media = NULL, despad = NULL) {if (is.null(media)) {
+    media <- mean(y)}
+  if (is.null(despad)) {despad <- sd(y)}
+  (y - media)/despad}
+status <- ifelse(abs(score_z(y)) > 2, "outlier", "tipical") # ocorrência de outlier
+table(status)
+```
+
+### Densidade Básica - outlier
+
+```{r descritivaDb5,  message=FALSE, warning=FALSE}
+y <- tabela5$Db
+scale(y) # padronização da variável 
+score_z <- function(y, media = NULL, despad = NULL) {if (is.null(media)) {
+    media <- mean(y)}
+  if (is.null(despad)) {despad <- sd(y)}
+  (y - media)/despad}
+status <- ifelse(abs(score_z(y)) > 2, "outlier", "tipical") # ocorrência de outlier
+table(status)
+```
+
+## Gráfico Box Plot
+
+```{r box plot5}
+par(mfrow=c(1,2))
+boxplot(tabela5$Db, col="blue", main="Box Plot", 
+        ylab= "Densidade Básica (g/cm³)", adj=0.5, ylim=c(0.2,1.2))
+
+boxplot(tabela5$PCS, col="purple",main="Box Plot", 
+        ylab= "Poder Calorífico (MJ/kg)", adj=0.5, ylim=c(4000,5500))
+```
+
+## Matriz de correlação (valor de r e o pvalor)
+
+```{r correlação5, message=FALSE, warning=FALSE}
+
+chart.Correlation(tabela5[-1], histogram =TRUE)
+```
+
+## Regressão Linear Múltipla 
+
+```{r regressao5}
+# Ajuste do modelo 
+modelo5<-lm(formula =PCS~Db, data=tabela5); modelo5
+
+# Estatísticas das estimativas dos paramentros do modelo
+summary(modelo5)
+
+# Anova da regressão do modelo
+anova(modelo5)
+```
+
+### Medidas de Precisão para Análise do Modelo
+
+```{r precisao5}
+PCS_est<-predict.lm(modelo5)
+newdata1 = data.frame(tabela5, PCS_est)
+Res<-(((newdata1$PCS-newdata1$PCS_est)/(newdata1$PCS))*100)
+newdata1 = data.frame(tabela5, PCS_est,Res)
+
+resid<-(newdata1$PCS-newdata1$PCS_est)
+Res2<-resid^2
+
+SQResiduo<- sum(Res2)
+
+SQTotal<-var(newdata1$PCS)*((length(newdata1$PCS))-1)
+
+R2<-(1-(SQResiduo/SQTotal))
+a<-(length(newdata1$PCS)-1)/(length(newdata1$PCS)-3)
+
+R2adj<-(1-(a*(1-R2)))
+
+Syx<-sqrt(SQResiduo/((length(newdata1$PCS))-2))
+
+Syx_Porc<-(Syx/(mean(newdata1$PCS)))*100
+
+R2<-round(R2, 2)
+R2adj<-round(R2adj,2)
+Syx<-round(Syx,2)
+Syx_Porc<-round(Syx_Porc, 2)
+
+newdata11 = data.frame(R2,R2adj,Syx,Syx_Porc)
+
+# Criar da Tabela Descritiva
+knitr::kable(newdata11, align = 'cc', 
+             caption = "Medidas de Precisão do Modelo",
+             col.names = c("R$^{2}$", "R$_{adj}^{2}$", "S$_{yx}$", "S$_{yx}$%")) %>%
+  kable_classic(full_width = F, html_font = "Times", font_size = 16)
+
+
+```
+
+### Predição do PCS aplicando o modelo
+
+```{r predicao5}
+newdatas<-data.frame(Db= c(0.50))
+PCS_estimado1 = predict(modelo5, newdatas, interval = "confidence");
+PCS_estimado1 # Valores do limite de confiança dos valores preditos
+
+```
+
+### Análise grafica do modelo
+
+```{r analise_grafica5}
+par(mfrow=c(2,2))
+plot(modelo5, pch=20)
+```
+
+### Testes de hipoteses
+
+NORMALIDADE:\
+**Ho: resíduos seguem distribuição normal;**\
+**Hi: resíduos não seguem distribuição normal**\
+Resultado:\
+**Valor de p \> 0.05, não rejeita Ho para alfa=5%.**
+
+```{r Normalidade5}
+## Normalidade dos Resíduos
+shapiro.test(modelo5$residuals)
+ks.test(modelo5$residuals, "pnorm")
+```
+
+INDEPENDÊNCIA DOS RESÍDUOS:\
+**Ho: resíduos são independentes;**\
+**Hi: resíduos não são independentes**\
+Resultado:\
+**Valor de p \> 0.05, não rejeita Ho para alfa=5%.**
+
+```{r Residuos5}
+## Independencia dos Resíduos (Durbin-Watson)
+durbinWatsonTest(modelo5)
+```
+
+HOMOSCEDASTICIDADE DOS RESÍDUOS:\
+**Ho: resíduos são homogênios;**\
+**Hi: resíduos não são homogênios;**\
+Resultado:\
+**Valor de p \> 0.05, não rejeita Ho para alfa=5%.**
+
+```{r Homocedasticidade5}
+## Homocedasticidade (Breusch-Pagan)
+bptest(modelo5)
+ncvTest(modelo5)
+```
+
+### Gráfico 1:1 e de Resíduos
+
+**Valores em vermelho estimados; valores em azul observados.**
+
+```{r grafico_reg5}
+
+G1<-ggplot(newdata1) + 
+  geom_point(size=2, aes(x=PCS, y=PCS_est), color="red2")+
+  geom_abline(intercept = 0, slope = 1, color = "black")+
+  geom_point(size=2, aes(x=PCS_est, y=PCS), color="blue2")+
+  theme_classic()+ # aparencia clean do gráfico
+  labs(x = "PCS Observado (MJ/kg)",
+       y = "PCS Estimado (MJ/kg)",
+       title = "Gráfico 1:1")+ # legendas
+  scale_x_continuous(breaks = seq(3800, 5600, 200), limits= c(3800, 5600)) + # eixo x
+  scale_y_continuous(breaks = seq(3800, 5600, 200), limits= c(3800, 5600)) + # eixo y
+  theme( plot.title = element_text(hjust = 0.5),
+         legend.title = element_text(hjust = 0.5))+ # centralizar títulos
+  theme(plot.title = element_text(size = 13, face = "bold"),
+        axis.title = element_text(size = 12),
+        axis.text = element_text(size = 10))  # negrito nos títulos
+
+G2<-ggplot(newdata1) + 
+  geom_point(size=2, aes(x=PCS, y=Res)
+             ,color="black")+ # gráfico de pontos
+  theme_classic()+ # aparencia clean do gráfico
+  labs(x = "PCS Observado (MJ/kg)",
+       y = "Resíduo (%)",
+       title = "Gráfico de Resíduos")+ # legendas
+  scale_x_continuous(breaks = seq(3800, 5600, 400), limits= c(3800, 5600)) +   
+  scale_y_continuous(breaks = seq(-30, 30, 10), limits= c(-30,30)) + 
+    theme( plot.title = element_text(hjust = 0.5),
+         legend.title = element_text(hjust = 0.5))+ # centralizar títulos
+  theme(plot.title = element_text(size = 13, face = "bold"),
+        axis.title = element_text(size = 12),
+        axis.text = element_text(size = 10))+
+  # negrito nos títulos
+  geom_hline(yintercept = 0, color="black")+ # linha no 0 do eixo y
+  theme(axis.title.y = element_text(angle = 90))
+
+grid.arrange(G1,G2, ncol=1) 
+```
+
+## Regressão Linear
+
+```{r grafico5, message=FALSE, warning=FALSE}
+grafico<-ggplot(data = tabela5, #banco de dados
+       mapping = aes(x = Db, y = PCS)) + # eixo x e y
+    geom_point(size=2) + # gráfico de dispersão
+    geom_smooth(method = "lm", # método linear 
+                formula='y ~ x', # fórmula
+                color="red", # cor
+                lwd=0.8)+ # tamanho da linha
+  theme_classic()+ # modo classico de gráfico (fundo branco)
+  stat_regline_equation(aes(label=paste(..eq.label.., # inserir a equação
+                                        ..rr.label.., # inserir o R2
+                                        sep = "~~~~")), # espaço entre a formula e o R2  
+                        formula=y ~ x, # formula
+                        label.x = 0.20, label.y=5300)+ # localização xy da formula
+  scale_x_continuous(breaks = seq(0.20, 1.20, 0.20), limits= c(0.20, 1.20)) + 
+  scale_y_continuous(breaks = seq(3800, 5400, 400), limits= c(3800, 5400))+ 
+  labs(x = "Densidade Básica (g/cm³)", # legenda do eixo x
+       y = "Poder Calorífico Superior (MJ/kg)")+ # legenda do eixo y
+  theme(plot.title = element_text(hjust = 0.5),   
+         legend.title = element_text(hjust = 0.5))+ # Alinhamento do Título e eixos
+  theme(plot.title = element_text(size = 12, face = "bold",family="TT Times New Roman"),
+        axis.title = element_text(size = 12, face = "bold", family="TT Times New Roman"),
+        axis.text = element_text(size = 12, face = "bold", family="TT Times New Roman"))
+# formatação dos títulos e eixos, com tamanho da fonte (size), negrido (bold) e 
+# tipo de fonte (TI Times New Roman) 
+grafico
+```
+
+# Citações
+
+> De acordo com @grolemund2018r, a ciência de dados é uma área em crescimento.
+
+> A regressão não linear geralmente possui parâmetros interpretáveis [@ROSSE2000]. Para @Chen2021, a análise multivariada é a melhor opção.
+
+> No artigo de @quirino2005poder vemos informações equivocadas sobre a relação do poder calorífico e a densidade básica.
+
+# Referências

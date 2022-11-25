@@ -1,0 +1,20 @@
+0. RMarkdown com todos
+https://rpubs.com/Biahom/completoPCSeDb
+
+1. PCU e Teor de Umidade
+https://rpubs.com/Biahom/PCUxU
+
+2. Densidade e Propriedades Mecânicas do Combustível
+https://rpubs.com/Biahom/densidaderr
+
+3. PCS e Composição Elementar
+https://rpubs.com/Biahom/PCSxCHO
+
+4. PCS e Composição Química
+https://rpubs.com/Biahom/PCSxCQuimica
+
+5. PCS e Composição Imediata
+https://rpubs.com/Biahom/PCSxAI
+
+6. PCS e Densidade Básica
+https://rpubs.com/Biahom/pcsxdb

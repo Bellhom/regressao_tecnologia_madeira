@@ -1,0 +1,362 @@
+---
+title: |
+  <center>
+  ![](https://i.imgur.com/1qIPO3t.png){ width=70%   sytle="display; left:50%" }   
+  
+    Poder Calorífico Superior em função da Composição Química da biomassa
+author: <center> "Elaborado por Profª Drª Isabel Homczinski"
+date: <center> "`r format(Sys.time(), '%d %B, %Y')`"
+bibliography: "refs.bib"
+csl: "instituto-brasileiro-de-informacao-em-ciencia-e-tecnologia-abnt.csl"
+output: 
+    html_document:
+      highlight: zenburn
+      theme: bootstrap
+      number_sections: yes
+      toc: yes
+      toc_float:
+         collapsed: yes
+         smooth_scroll: yes
+---
+
+```{=html}
+<style> body{text-align:justify; font-family: arial; padding: 12px}
+p {text-indent: 1.5em; line-height:1.5em; font-size: 11pt;  margin-left: 3px; margin-right: 2px; 
+margin-top: 3px; margin-bottom: 2px;}
+h1{font-size: 14pt; font-weight: bold; }
+h2 {font-size: 13pt; font-weight: bold}
+h3 {font-size: 12pt; font-weight: bold}
+</style>
+```
+
+# Instalação dos pacotes
+
+> Instalação do pacote e verificação se todos estão instalados. O Comando abaixo ajuda a verificar se os pacotes estão instalados, ou se necessitam ser instalados.
+
+```{r Pacotes2, message=FALSE, warning=FALSE}
+
+pacotes <- c("tidyverse", "readxl", "ggpubr", "kableExtra", 
+             "PerformanceAnalytics", "scatterplot3d", "MASS", 
+             "gridExtra", "car", "lmtest", "plyr", "knitr", "dplyr")
+
+if(sum(as.numeric(!pacotes %in% installed.packages())) != 0){
+  instalador <- pacotes[!pacotes %in% installed.packages()]
+  for(i in 1:length(instalador)) {
+    install.packages(instalador, dependencies = T)
+    break()}
+  sapply(pacotes, require, character = T) 
+} else {
+  sapply(pacotes, require, character = T) 
+}
+
+```
+
+# Poder Calorífico Superior e a Composição Química
+
+O Poder calorífico é uma medida da quantidade de energia térmica liberada, na forma de calor, na queima completa de 1kg de combustível. O objetivo principal dessa modelagem é verificar **se o Poder Calorífico (PC) tem correlação com a Composição Química da biomassa (teor de lignina, polissacarídeos e extrativos)**. Caso haja associação entre essas variáveis, interpretar a modelagem estatística realizada e a influência de cada variável no valor do PC, por meio da comparação da magnitude dos betas da equação de regressão ajustada. Adicionalmente, avaliar a qualidade dos dados experimentais por meio das seguintes estatísticas descritivas: média, desvio padrão, coeficiente de variação e score z. Como referência para a Área de Tecnologia da Madeira, nas disciplinas ministradas pela professora Gilmara, deve-se considerar dados de excelente qualidade **se o Coeficiente de variação tiver valor de até 10%, de 10 a 20% dados bons, de 20 a 30 % dados ruins e acima de 30% dados péssimos**. Também, no que se refere ao score Z, valores em módulo acima de 2 serão considerados como outliers (pontos atípicos). Os outliers também serão identificados por meio de gráficos box plot das variáveis do modelo.
+
+## Banco de Dados
+
+```{r arquivo3, message=FALSE, warning=FALSE}
+
+tabela3 <- read_excel("Dados.xlsx",
+                 sheet = "Composicao_quimica")
+```
+
+```{r dados3}
+tabela3 %>%
+  kbl(caption = "Tabela dos Dados", align = 'cc') %>%
+  kable_classic(full_width = F, html_font = "Times", font_size = 12)
+```
+
+## Análise Descritiva
+
+```{r analise_descritiva2}
+# Poder Calorífico Superior
+y <- tabela3$PCS
+mean_and_sd <- function(y) {
+    m <- mean(y) # média
+    s <- sd(y) # desvio padrão
+    # sprintf("%0.3f U00B1 %0.3f", m, s)
+    sprintf("%0.2f $\\pm$ %0.2f", m, s)}
+Med_e_sd<- mean_and_sd(y)
+cv <- function(y) {100 * sd(y)/mean(y)}
+Coef_de_Variacao<-cv(y) # coeficiente de variação
+Coef_de_Variacao<-round(Coef_de_Variacao, 2)
+PCS<-data.frame(Med_e_sd, Coef_de_Variacao)
+
+# Extrativos
+y <- tabela3$extrativos
+mean_and_sd <- function(y) {
+    m <- mean(y) # média
+    s <- sd(y) # desvio padrão
+    # sprintf("%0.3f U00B1 %0.3f", m, s)
+    sprintf("%0.2f $\\pm$ %0.2f", m, s)}
+Med_e_sd<- mean_and_sd(y)
+cv <- function(y) {100 * sd(y)/mean(y)}
+Coef_de_Variacao<-cv(y) # coeficiente de variação
+Coef_de_Variacao<-round(Coef_de_Variacao, 2)
+extrativos<-data.frame(Med_e_sd, Coef_de_Variacao)
+
+# Lignina
+y <- tabela3$lignina
+mean_and_sd <- function(y) {
+    m <- mean(y) # média
+    s <- sd(y) # desvio padrão
+    # sprintf("%0.3f U00B1 %0.3f", m, s)
+    sprintf("%0.2f $\\pm$ %0.2f", m, s)}
+Med_e_sd<- mean_and_sd(y)
+cv <- function(y) {100 * sd(y)/mean(y)}
+Coef_de_Variacao<-cv(y) # coeficiente de variação
+Coef_de_Variacao<-round(Coef_de_Variacao, 2)
+lignina<-data.frame(Med_e_sd, Coef_de_Variacao)
+
+# Holocelulose
+y <- tabela3$holocelulose
+mean_and_sd <- function(y) {
+    m <- mean(y) # média
+    s <- sd(y) # desvio padrão
+    # sprintf("%0.3f U00B1 %0.3f", m, s)
+    sprintf("%0.2f $\\pm$ %0.2f", m, s)}
+Med_e_sd<- mean_and_sd(y)
+cv <- function(y) {100 * sd(y)/mean(y)}
+Coef_de_Variacao<-cv(y) # coeficiente de variação
+Coef_de_Variacao<-round(Coef_de_Variacao, 2)
+holocelulose<-data.frame(Med_e_sd, Coef_de_Variacao)
+
+# Junção dos data.frame
+dados<-rbind(PCS,extrativos)
+dados<-rbind(dados, lignina)
+dados<-rbind(dados, holocelulose)
+
+# Criar uma coluna com o nome das variáveis
+dados<-mutate(dados, 
+      Variaveis=c("Poder Calorífico Superior (MJ/kg)", 
+                  "Extrativos", "Lignina", "Holocelulose"))
+dados<-data.frame(dados)
+
+#Organizar as colunas no data.frame
+date<-dplyr::select(dados, Variaveis, Med_e_sd, Coef_de_Variacao) 
+
+# Criar da Tabela Descritiva
+knitr::kable(date, align = 'cc', caption = "Tabela Descritiva",
+             col.names = c("Variáveis", "Média $\\pm$ sd", "  CV(%)")) %>%
+  kable_classic(full_width = F, html_font = "Times", font_size = 16)
+```
+
+### Poder Calorífico Superior - outlier
+
+```{r descritivaPCS1,  message=FALSE, warning=FALSE}
+y <- tabela3$PCS
+scale(y) # padronização da variável 
+score_z <- function(y, media = NULL, despad = NULL) {if (is.null(media)) {
+    media <- mean(y)}
+  if (is.null(despad)) {despad <- sd(y)}
+  (y - media)/despad}
+status <- ifelse(abs(score_z(y)) > 2, "outlier", "tipical") # ocorrência de outlier
+table(status)
+```
+
+### Extrativos - outlier
+
+```{r descritivaextrativos,  message=FALSE, warning=FALSE}
+y <- tabela3$extrativos
+scale(y) # padronização da variável 
+score_z <- function(y, media = NULL, despad = NULL) {if (is.null(media)) {
+    media <- mean(y)}
+  if (is.null(despad)) {despad <- sd(y)}
+  (y - media)/despad}
+status <- ifelse(abs(score_z(y)) > 2, "outlier", "tipical") # ocorrência de outlier
+table(status)
+```
+
+### Lignina - outlier
+
+```{r descritivalignina,  message=FALSE, warning=FALSE}
+y <- tabela3$lignina
+scale(y) # padronização da variável 
+score_z <- function(y, media = NULL, despad = NULL) {if (is.null(media)) {
+    media <- mean(y)}
+  if (is.null(despad)) {despad <- sd(y)}
+  (y - media)/despad}
+status <- ifelse(abs(score_z(y)) > 2, "outlier", "tipical") # ocorrência de outlier
+table(status)
+```
+
+### Holocelulose - outlier
+
+```{r descritivaholocelulose,  message=FALSE, warning=FALSE}
+y <- tabela3$holocelulose
+scale(y) # padronização da variável 
+score_z <- function(y, media = NULL, despad = NULL) {if (is.null(media)) {
+    media <- mean(y)}
+  if (is.null(despad)) {despad <- sd(y)}
+  (y - media)/despad}
+status <- ifelse(abs(score_z(y)) > 2, "outlier", "tipical") # ocorrência de outlier
+table(status)
+```
+
+## Gráfico Box Plot
+
+```{r box plot3}
+par(mfrow=c(1,4))
+boxplot(tabela3$extrativos, col="blue", main="Box Plot", 
+        ylab= "Extrativos", adj=0.5, ylim=c(0,4))
+
+boxplot(tabela3$lignina, col="purple",main="Box Plot", 
+        ylab= "Lignina", adj=0.5, ylim=c(26,32))
+
+boxplot(tabela3$holocelulose,col="green2",main="Box Plot", ylab= "Holocelulose", 
+        adj=0.5, ylim=c(64,72)) 
+
+boxplot(tabela3$PCS,col="gray",main="Box Plot", ylab= "PCS (MJ/kg)", 
+        adj=0.5, ylim=c(17.0,17.8)) 
+```
+
+## Dispersão, Histograma e Correlação
+
+```{r correlação3, message=FALSE, warning=FALSE}
+
+chart.Correlation(tabela3, histogram =TRUE)
+```
+
+## Regressão Linear Múltipla 
+
+```{r regressao3}
+
+# Ajuste do modelo 
+modelo3<-lm(formula =PCS~-1+extrativos+lignina+holocelulose, data=tabela3) 
+modelo3
+
+# Estatísticas das estimativas dos paramentros do modelo
+summary(modelo3)
+
+# Anova da regressão do modelo
+anova(modelo3)
+```
+
+### Medidas de Precisão para Análise do Modelo
+
+```{r precisao3, message=FALSE, warning=FALSE}
+
+PCS3_est<- predict(modelo3)
+resid<-(tabela3$PCS-PCS3_est)
+Res2<-resid^2
+SQResiduo<- sum(Res2)
+
+Syx<-sqrt(SQResiduo/((length(tabela3$PCS))-3))
+
+Syx_Porc<-(Syx/(mean(tabela3$PCS)))*100
+
+Syx<-round(Syx,2)
+Syx_Porc<-round(Syx_Porc, 2)
+
+newdata33 = data.frame(Syx,Syx_Porc)
+
+# Criar da Tabela Descritiva
+knitr::kable(newdata33, align = 'cc', 
+             caption = "Medidas de Precisão do Modelo",
+             col.names = c("S$_{yx}$", "S$_{yx}$%")) %>%
+  kable_classic(full_width = F, html_font = "Times", font_size = 16)
+
+```
+
+### Predição do PCS aplicando o modelo
+
+```{r predicao3}
+newdatas<-data.frame(extrativos= c(1.25),lignina= c(30), holocelulose= c(68))
+PCS_estimado1 = predict(modelo3, newdatas, interval = "confidence");
+PCS_estimado1 # Valores do limite de confiança dos valores preditos
+```
+
+### Testes de hipoteses
+
+NORMALIDADE:\
+**Ho: resíduos seguem distribuição normal;**\
+**Hi: resíduos não seguem distribuição normal**\
+Resultado:\
+**Valor de p \> 0.05, não rejeita Ho para alfa=5%.**
+
+```{r Normalidade1}
+## Normalidade dos Resíduos
+shapiro.test(modelo3$residuals)
+ks.test(modelo3$residuals, "pnorm")
+```
+
+INDEPENDÊNCIA DOS RESÍDUOS:\
+**Ho: resíduos são independentes;**\
+**Hi: resíduos não são independentes**\
+Resultado:\
+**Valor de p \> 0.05, não rejeita Ho para alfa=5%.**
+
+```{r Residuos1}
+## Independencia dos Resíduos (Durbin-Watson)
+durbinWatsonTest(modelo3)
+```
+
+HOMOSCEDASTICIDADE DOS RESÍDUOS:\
+**Ho: resíduos são homogênios;**\
+**Hi: resíduos não são homogênios;**\
+Resultado:\
+**Valor de p \> 0.05, não rejeita Ho para alfa=5%.**
+
+```{r Homocedasticidade1}
+## Homocedasticidade (Breusch-Pagan)
+bptest(modelo3)
+ncvTest(modelo3)
+```
+
+### Gráfico 1:1 e de Resíduos
+
+**Valores em vermelho estimados; valores em azul observados.**
+
+```{r grafico_reg3}
+
+PCS3_est<-predict.lm(modelo3)
+newdata3 = data.frame(tabela3, PCS3_est)
+Res<-(((newdata3$PCS-newdata3$PCS3_est)/(newdata3$PCS))*100)
+newdata3 = data.frame(tabela3, PCS3_est,Res)
+
+G1<-ggplot(newdata3) + 
+  geom_point(size=2, aes(x=PCS, y=PCS3_est), color="red2")+
+  geom_abline(intercept = 0, slope = 1, color = "black")+
+  geom_point(size=2, aes(x=PCS3_est, y=PCS), color="blue2")+
+  theme_classic()+ # aparencia clean do gráfico
+  labs(x = "PCS Observada (MJ/kg)",
+       y = "PCS Estimada (Mj/kg)",
+       title = "Gráfico 1:1")+ # legendas
+  scale_x_continuous(breaks = seq(17.0, 18.0, 0.20), limits= c(17.0, 18.0))+
+  scale_y_continuous(breaks = seq(17.0, 18.0, 0.20), limits= c(17.0, 18.0))+
+  theme( plot.title = element_text(hjust = 0.5),
+         legend.title = element_text(hjust = 0.5))+ # centralizar títulos
+  theme(plot.title = element_text(size = 13, face = "bold"),
+        axis.title = element_text(size = 12),
+        axis.text = element_text(size = 10))  # negrito nos títulos
+
+G2<-ggplot(newdata3) + 
+  geom_point(size=2, aes(x=PCS, y=Res)
+             ,color="black")+ # gráfico de pontos
+  theme_classic()+ # aparencia clean do gráfico
+  labs(x = "PCS Observada (g/cm³)",
+       y = "Resíduo (%)",
+       title = "Gráfico de Resíduos")+ # legendas
+  scale_x_continuous(breaks = seq(17.0, 18.0, 0.20), limits= c(17.0, 18.0)) + 
+  scale_y_continuous(breaks = seq(-30, 30, 10), limits= c(-30,30)) +
+  theme( plot.title = element_text(hjust = 0.5),
+         legend.title = element_text(hjust = 0.5))+ # centralizar títulos
+  theme(plot.title = element_text(size = 13, face = "bold"),
+        axis.title = element_text(size = 12),
+        axis.text = element_text(size = 10))+ # negrito nos títulos
+  geom_hline(yintercept = 0, color="black")+ # linha no 0 do eixo y
+  theme(axis.title.y = element_text(angle = 90))
+
+grid.arrange(G1,G2, ncol=1) 
+```
+
+# Citações
+
+> De acordo com @grolemund2018r, a ciência de dados é uma área em crescimento.
+
+> A regressão não linear geralmente possui parâmetros interpretáveis [@ROSSE2000]. Para @Chen2021, a análise multivariada é a melhor opção.
+
+# Referências
